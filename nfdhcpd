@@ -79,7 +79,6 @@ lease_renewal = integer(min=0, max=4294967295)
 server_ip = ip_addr()
 dhcp_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=4)
-domain = string(default=None)
 
 [ipv6]
 enable_ipv6 = boolean(default=True)
@@ -117,46 +116,6 @@ DHCP_REQRESP = {
     }
 
 
-def parse_routing_table(table="main", family=4):
-    """ Parse the given routing table to get connected route, gateway and
-    default device.
-
-    """
-    ipro = subprocess.Popen(["ip", "-%d" % family, "ro", "ls",
-                             "table", table], stdout=subprocess.PIPE)
-    routes = ipro.stdout.readlines()
-
-    def_gw = None
-    def_dev = None
-    def_net = None
-
-    for route in routes:
-        match = re.match(r'^default.*via ([^\s]+).*dev ([^\s]+)', route)
-        if match:
-            def_gw, def_dev = match.groups()
-            break
-
-    for route in routes:
-        # Find the least-specific connected route
-        m = re.match("^([^\\s]+) dev %s" % def_dev, route)
-        if not m:
-            continue
-
-        if family == 6 and m.group(1).startswith("fe80:"):
-            # Skip link-local declarations in "main" table
-            continue
-
-        def_net = m.group(1)
-
-        try:
-            def_net = IPy.IP(def_net)
-        except ValueError, e:
-            logging.warn("Unable to parse default route entry %s: %s",
-                         def_net, str(e))
-
-    return Subnet(net=def_net, gw=def_gw, dev=def_dev)
-
-
 def parse_binding_file(path):
     """ Read a client configuration from a tap file
 
@@ -167,24 +126,46 @@ def parse_binding_file(path):
         logging.warn("Unable to open binding file %s: %s", path, str(e))
         return None
 
+    tap = os.path.basename(path)
+    indev = None
     mac = None
-    ips = None
-    link = None
+    ip = None
     hostname = None
+    subnet = None
+    gateway = None
+    subnet6 = None
+    gateway6 = None
+    eui64 = None
+
+    def get_value(line):
+        v = line.strip().split('=')[1]
+        if v == '':
+          return None
+        return v
 
     for line in iffile:
         if line.startswith("IP="):
-            ip = line.strip().split("=")[1]
-            ips = ip.split()
+            ip = get_value(line)
         elif line.startswith("MAC="):
-            mac = line.strip().split("=")[1]
-        elif line.startswith("LINK="):
-            link = line.strip().split("=")[1]
+            mac = get_value(line)
         elif line.startswith("HOSTNAME="):
-            hostname = line.strip().split("=")[1]
+            hostname = get_value(line)
+        elif line.startswith("INDEV="):
+            indev = get_value(line)
+        elif line.startswith("SUBNET="):
+            subnet = get_value(line)
+        elif line.startswith("GATEWAY="):
+            gateway = get_value(line)
+        elif line.startswith("SUBNET6="):
+            subnet6 = get_value(line)
+        elif line.startswith("GATEWAY6="):
+            gateway6 = get_value(line)
+        elif line.startswith("EUI64="):
+            eui64 = get_value(line)
 
-    return Client(mac=mac, ips=ips, link=link, hostname=hostname)
-
+    return Client(tap=tap, mac=mac, ip=ip,
+                  hostname=hostname, indev=indev, subnet=subnet,
+                  gateway=gateway, subnet6=subnet6, gateway6=gateway6, eui64=eui64 )
 
 class ClientFileHandler(pyinotify.ProcessEvent):
     def __init__(self, server):
@@ -197,7 +178,7 @@ class ClientFileHandler(pyinotify.ProcessEvent):
         Currently this removes an interface from the watch list
 
         """
-        self.server.remove_iface(event.name)
+        self.server.remove_tap(event.name)
 
     def process_IN_CLOSE_WRITE(self, event): # pylint: disable=C0103
         """ Add file handler
@@ -205,23 +186,27 @@ class ClientFileHandler(pyinotify.ProcessEvent):
         Currently this adds an interface to the watch list
 
         """
-        self.server.add_iface(os.path.join(event.path, event.name))
+        self.server.add_tap(os.path.join(event.path, event.name))
 
 
 class Client(object):
-    def __init__(self, mac=None, ips=None, link=None, hostname=None):
+    def __init__(self, tap=None, indev=None, mac=None, ip=None, hostname=None,
+                 subnet=None, gateway=None, subnet6=None, gateway6=None, eui64=None ):
         self.mac = mac
-        self.ips = ips
+        self.ip = ip
         self.hostname = hostname
-        self.link = link
-        self.iface = None
-
-    @property
-    def ip(self):
-        return self.ips[0]
+        self.indev = indev
+        self.tap = tap
+        self.subnet = subnet
+        self.gateway = gateway
+        self.net = Subnet(net=subnet, gw=gateway, dev=tap)
+        self.subnet6 = subnet6
+        self.gateway6 = gateway6
+        self.net6 = Subnet(net=subnet6, gw=gateway6, dev=tap)
+        self.eui64 = eui64
 
     def is_valid(self):
-        return self.mac is not None and self.ips is not None\
+        return self.mac is not None and self.ip is not None\
                and self.hostname is not None
 
 
@@ -294,14 +279,12 @@ class VMNetProxy(object): # pylint: disable=R0902
                  rs_queue_num=None, ns_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
-                 dhcp_domain='',
                  dhcp_server_ip=DHCP_DUMMY_SERVER_IP, dhcp_nameservers=None,
                  ra_period=DEFAULT_RA_PERIOD, ipv6_nameservers=None):
 
         self.data_path = data_path
         self.lease_lifetime = dhcp_lease_lifetime
         self.lease_renewal = dhcp_lease_renewal
-        self.dhcp_domain = dhcp_domain
         self.dhcp_server_ip = dhcp_server_ip
         self.ra_period = ra_period
         if dhcp_nameservers is None:
@@ -317,9 +300,9 @@ class VMNetProxy(object): # pylint: disable=R0902
         self.ipv6_enabled = False
 
         self.clients = {}
-        self.subnets = {}
-        self.ifaces = {}
-        self.v6nets = {}
+        #self.subnets = {}
+        #self.ifaces = {}
+        #self.v6nets = {}
         self.nfq = {}
         self.l2socket = socket.socket(socket.AF_PACKET,
                                       socket.SOCK_RAW, ETH_P_ALL)
@@ -374,26 +357,26 @@ class VMNetProxy(object): # pylint: disable=R0902
         q.set_mode(nfqueue.NFQNL_COPY_PACKET)
         self.nfq[q.get_fd()] = q
 
-    def sendp(self, data, iface):
+    def sendp(self, data, dev):
         """ Send a raw packet using a layer-2 socket
 
         """
+        logging.debug("%s", data)
         if isinstance(data, BasePacket):
             data = str(data)
 
-        self.l2socket.bind((iface, ETH_P_ALL))
+        self.l2socket.bind((dev, ETH_P_ALL))
         count = self.l2socket.send(data)
         ldata = len(data)
         if count != ldata:
             logging.warn("Truncated send on %s (%d/%d bytes sent)",
-                         iface, count, ldata)
+                         dev, count, ldata)
 
     def build_config(self):
         self.clients.clear()
-        self.subnets.clear()
 
         for path in glob.glob(os.path.join(self.data_path, "*")):
-            self.add_iface(path)
+            self.add_tap(path)
 
     def get_ifindex(self, iface):
         """ Get the interface index from sysfs
@@ -409,7 +392,7 @@ class VMNetProxy(object): # pylint: disable=R0902
             f = open(path, 'r')
         except EnvironmentError:
             logging.debug("%s is probably down, removing", iface)
-            self.remove_iface(iface)
+            self.remove_tap(iface)
 
             return ifindex
 
@@ -423,7 +406,7 @@ class VMNetProxy(object): # pylint: disable=R0902
         except EnvironmentError, e:
             logging.warn("Error reading %s's ifindex from sysfs: %s",
                          iface, str(e))
-            self.remove_iface(iface)
+            self.remove_tap(iface)
         finally:
             f.close()
 
@@ -443,7 +426,7 @@ class VMNetProxy(object): # pylint: disable=R0902
             f = open(path, 'r')
         except EnvironmentError:
             logging.debug("%s is probably down, removing", iface)
-            self.remove_iface(iface)
+            self.remove_tap(iface)
             return addr
 
         try:
@@ -456,68 +439,44 @@ class VMNetProxy(object): # pylint: disable=R0902
 
         return addr
 
-    def add_iface(self, path):
+    def add_tap(self, path):
         """ Add an interface to monitor
 
         """
-        iface = os.path.basename(path)
+        tap = os.path.basename(path)
 
-        logging.debug("Updating configuration for %s", iface)
+        logging.debug("Updating configuration for %s", tap)
         binding = parse_binding_file(path)
         if binding is None:
             return
-        ifindex = self.get_ifindex(iface)
+        ifindex = self.get_ifindex(binding.tap)
 
         if ifindex is None:
-            logging.warn("Stale configuration for %s found", iface)
+            logging.warn("Stale configuration for %s found", tap)
         else:
             if binding.is_valid():
-                binding.iface = iface
                 self.clients[binding.mac] = binding
-                self.subnets[binding.link] = parse_routing_table(binding.link)
-                logging.debug("Added client %s on %s", binding.hostname, iface)
-                self.ifaces[ifindex] = iface
-                self.v6nets[iface] = parse_routing_table(binding.link, 6)
+                logging.debug("Added client %s on %s", binding.hostname, tap)
+        logging.debug("clients %s", self.clients.keys())
 
-    def remove_iface(self, iface):
+    def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
 
         """
-        if iface in self.v6nets:
-            del self.v6nets[iface]
+        for b in self.clients.values():
+            if b.tap == tap:
+                del b
 
-        for mac in self.clients.keys():
-            if self.clients[mac].iface == iface:
-                del self.clients[mac]
-
-        for ifindex in self.ifaces.keys():
-            if self.ifaces[ifindex] == iface:
-                del self.ifaces[ifindex]
-
-        logging.debug("Removed interface %s", iface)
+        logging.debug("Removed interface %s", tap)
 
     def dhcp_response(self, i, payload): # pylint: disable=W0613,R0914
-        """ Generate a reply to a BOOTP/DHCP request
+        """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
         """
-        indev = payload.get_indev()
-        try:
-            # Get the actual interface from the ifindex
-            iface = self.ifaces[indev]
-        except KeyError:
-            # We don't know anything about this interface, so accept the packet
-            # and return
-            logging.debug("Ignoring DHCP request on unknown iface %d", indev)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
-            payload.set_verdict(nfqueue.NF_ACCEPT)
-            return
-
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
-
-        # Signal the kernel that it shouldn't further process the packet
-        payload.set_verdict(nfqueue.NF_DROP)
+        logging.debug("IN DHCP RESPONCE")
+        logging.debug(pkt.show())
 
         # Get the client MAC address
         resp = pkt.getlayer(BOOTP).copy()
@@ -532,22 +491,21 @@ class VMNetProxy(object): # pylint: disable=R0902
         try:
             binding = self.clients[mac]
         except KeyError:
-            logging.warn("Invalid client %s on %s", mac, iface)
+            logging.warn("Invalid client for mac %s ", mac)
+            payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
-        if iface != binding.iface:
-            logging.warn("Received spoofed DHCP request for %s from interface"
-                         " %s instead of %s", mac, iface, binding.iface)
-            return
+        # Signal the kernel that it shouldn't further process the packet
+        payload.set_verdict(nfqueue.NF_DROP)
 
-        resp = Ether(dst=mac, src=self.get_iface_hw_addr(iface))/\
+        resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
                IP(src=DHCP_DUMMY_SERVER_IP, dst=binding.ip)/\
                UDP(sport=pkt.dport, dport=pkt.sport)/resp
-        subnet = self.subnets[binding.link]
+        subnet = binding.net
 
         if not DHCP in pkt:
             logging.warn("Invalid request from %s on %s, no DHCP"
-                         " payload found", binding.mac, iface)
+                         " payload found", binding.mac, binding.tap)
             return
 
         dhcp_options = []
@@ -559,17 +517,12 @@ class VMNetProxy(object): # pylint: disable=R0902
                 requested_addr = opt[1]
 
         logging.info("%s from %s on %s", DHCP_TYPES.get(req_type, "UNKNOWN"),
-                     binding.mac, iface)
-
-        if self.dhcp_domain:
-            domainname = self.dhcp_domain
-        else:
-            domainname = binding.hostname.split('.', 1)[-1]
+                     binding.mac, binding.tap)
 
         if req_type == DHCPREQUEST and requested_addr != binding.ip:
             resp_type = DHCPNAK
             logging.info("Sending DHCPNAK to %s on %s: requested %s"
-                         " instead of %s", binding.mac, iface, requested_addr,
+                         " instead of %s", binding.mac, binding.tap, requested_addr,
                          binding.ip)
 
         elif req_type in (DHCPDISCOVER, DHCPREQUEST):
@@ -577,26 +530,27 @@ class VMNetProxy(object): # pylint: disable=R0902
             resp.yiaddr = self.clients[mac].ip
             dhcp_options += [
                  ("hostname", binding.hostname),
-                 ("domain", domainname),
-                 ("router", subnet.gw),
+                 ("domain", binding.hostname.split('.', 1)[-1]),
                  ("broadcast_address", str(subnet.broadcast)),
                  ("subnet_mask", str(subnet.netmask)),
                  ("renewal_time", self.lease_renewal),
                  ("lease_time", self.lease_lifetime),
             ]
+            if subnet.gw:
+              dhcp_options += [("router", subnet.gw)]
             dhcp_options += [("name_server", x) for x in self.dhcp_nameservers]
 
         elif req_type == DHCPINFORM:
             resp_type = DHCP_REQRESP[req_type]
             dhcp_options += [
                  ("hostname", binding.hostname),
-                 ("domain", domainname),
+                 ("domain", binding.hostname.split('.', 1)[-1]),
             ]
             dhcp_options += [("name_server", x) for x in self.dhcp_nameservers]
 
         elif req_type == DHCPRELEASE:
             # Log and ignore
-            logging.info("DHCPRELEASE from %s on %s", binding.mac, iface)
+            logging.info("DHCPRELEASE from %s on %s", binding.mac, binding.tap )
             return
 
         # Finally, always add the server identifier and end options
@@ -607,34 +561,48 @@ class VMNetProxy(object): # pylint: disable=R0902
         ]
         resp /= DHCP(options=dhcp_options)
 
+        if payload.get_indev() != self.get_ifindex(binding.indev):
+            logging.warn("Received spoofed DHCP request for %s from interface"
+                         " %s instead of %s", mac, payload.get_indev(), binding.indev)
+            return
+
         logging.info("%s to %s (%s) on %s", DHCP_TYPES[resp_type], mac,
-                     binding.ip, iface)
-        self.sendp(resp, iface)
+                     binding.ip, binding.tap)
+        self.sendp(resp, binding.indev)
 
     def rs_response(self, i, payload): # pylint: disable=W0613
         """ Generate a reply to a BOOTP/DHCP request
 
         """
-        indev = payload.get_indev()
+        pkt = IPv6(payload.get_data())
+        logging.debug("IN RS RESPONCE")
+        logging.debug(pkt.show())
+        mac = pkt.lladdr
+        logging.debug("rs for mac %s", mac)
         try:
-            # Get the actual interface from the ifindex
-            iface = self.ifaces[indev]
+          binding = self.clients[mac]
         except KeyError:
             logging.debug("Ignoring router solicitation on"
-                          " unknown interface %d", indev)
+                          " for mac %s", mac)
             # We don't know what to do with this packet, so let the kernel
             # handle it
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
-        ifmac = self.get_iface_hw_addr(iface)
-        subnet = self.v6nets[iface]
-        ifll = subnet.make_ll64(ifmac)
-
         # Signal the kernel that it shouldn't further process the packet
         payload.set_verdict(nfqueue.NF_DROP)
 
-        resp = Ether(src=self.get_iface_hw_addr(iface))/\
+        subnet = binding.net6
+
+        if subnet.net is None:
+          logging.debug("No IPv6 network assigned for the interface")
+          return
+
+        ifmac = self.get_iface_hw_addr(binding.indev)
+        ifll = subnet.make_ll64(ifmac)
+
+
+        resp = Ether(src=ifmac)/\
                IPv6(src=str(ifll))/ICMPv6ND_RA(routerlifetime=14400)/\
                ICMPv6NDOptPrefixInfo(prefix=str(subnet.prefix),
                                      prefixlen=subnet.prefixlen)
@@ -643,51 +611,53 @@ class VMNetProxy(object): # pylint: disable=R0902
             resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                      lifetime=self.ra_period * 3)
 
-        logging.info("RA on %s for %s", iface, subnet.net)
-        self.sendp(resp, iface)
+        logging.info("RA on %s for %s", binding.indev, subnet.net)
+        self.sendp(resp, binding.indev)
 
     def ns_response(self, i, payload): # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbor solicitation
 
         """
-        indev = payload.get_indev()
-        try:
-            # Get the actual interface from the ifindex
-            iface = self.ifaces[indev]
-        except KeyError:
-            logging.debug("Ignoring neighbour solicitation on"
-                          " unknown interface %d", indev)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
-            payload.set_verdict(nfqueue.NF_ACCEPT)
-            return
-
-        ifmac = self.get_iface_hw_addr(iface)
-        subnet = self.v6nets[iface]
-        ifll = subnet.make_ll64(ifmac)
-
         ns = IPv6(payload.get_data())
+        logging.debug("IN NS RESPONCE")
+        logging.debug(ns.show())
+
+        logging.debug("dst %s  tgt %s" , ns.dst, ns.tgt)
+
+        try:
+          binding = self.clients[ns.lladdr]
+        except:
+          logging.debug("Ignoring neighbour solicitation for eui64 %s", ns.tgt)
+          # We don't know what to do with this packet, so let the kernel
+          # handle it
+          payload.set_verdict(nfqueue.NF_ACCEPT)
+          return
+
+        subnet = binding.net6
+        if subnet.net is None:
+          logging.debug("No IPv6 network assigned for the interface")
+          payload.set_verdict(nfqueue.NF_ACCEPT)
+          return
+
+        payload.set_verdict(nfqueue.NF_DROP)
+
+        indevmac = self.get_iface_hw_addr(binding.indev)
+
+        ifll = subnet.make_ll64(indevmac)
 
         if not (subnet.net.overlaps(ns.tgt) or str(ns.tgt) == str(ifll)):
             logging.debug("Received NS for a non-routable IP (%s)", ns.tgt)
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return 1
 
-        payload.set_verdict(nfqueue.NF_DROP)
-
-        try:
-            client_lladdr = ns.lladdr
-        except AttributeError:
-            return 1
-
-        resp = Ether(src=ifmac, dst=client_lladdr)/\
+        logging.debug("na ether %s %s", binding.mac, ns.src)
+        resp = Ether(src=indevmac, dst=binding.mac)/\
                IPv6(src=str(ifll), dst=ns.src)/\
                ICMPv6ND_NA(R=1, O=0, S=1, tgt=ns.tgt)/\
-               ICMPv6NDOptDstLLAddr(lladdr=ifmac)
+               ICMPv6NDOptDstLLAddr(lladdr=indevmac)
 
-        logging.info("NA on %s for %s", iface, ns.tgt)
-        self.sendp(resp, iface)
-        return 1
+        logging.info("NA on %s for %s", binding.indev, ns.tgt)
+        self.sendp(resp, binding.indev)
 
     def send_periodic_ra(self):
         # Use a separate thread as this may take a _long_ time with
@@ -698,20 +668,18 @@ class VMNetProxy(object): # pylint: disable=R0902
         logging.debug("Sending out periodic RAs")
         start = time.time()
         i = 0
-        for client in self.clients.values():
-            iface = client.iface
-            ifmac = self.get_iface_hw_addr(iface)
-            if not ifmac:
-                continue
-
-            subnet = self.v6nets[iface]
+        for binding in self.clients.values():
+            tap = binding.tap
+            indev = binding.indev
+            mac = binding.mac
+            subnet = binding.net6
             if subnet.net is None:
                 logging.debug("Skipping periodic RA on interface %s,"
-                              " as it is not IPv6-connected", iface)
+                              " as it is not IPv6-connected", tap)
                 continue
-
-            ifll = subnet.make_ll64(ifmac)
-            resp = Ether(src=ifmac)/\
+            indevmac = self.get_iface_hw_addr(indev)
+            ifll = subnet.make_ll64(indevmac)
+            resp = Ether(src=indevmac)/\
                    IPv6(src=str(ifll))/ICMPv6ND_RA(routerlifetime=14400)/\
                    ICMPv6NDOptPrefixInfo(prefix=str(subnet.prefix),
                                          prefixlen=subnet.prefixlen)
@@ -719,12 +687,12 @@ class VMNetProxy(object): # pylint: disable=R0902
                 resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                          lifetime=self.ra_period * 3)
             try:
-                self.sendp(resp, iface)
+                self.sendp(resp, indev)
             except socket.error, e:
-                logging.warn("Periodic RA on %s failed: %s", iface, str(e))
+                logging.warn("Periodic RA on %s failed: %s", tap, str(e))
             except Exception, e:
                 logging.warn("Unkown error during periodic RA on %s: %s",
-                             iface, str(e))
+                             tap, str(e))
             i += 1
         logging.debug("Sent %d RAs in %.2f seconds", i, time.time() - start)
 
@@ -891,7 +859,6 @@ if __name__ == "__main__":
             "dhcp_lease_renewal": config["dhcp"].as_int("lease_renewal"),
             "dhcp_server_ip": config["dhcp"]["server_ip"],
             "dhcp_nameservers": config["dhcp"]["nameservers"],
-            "dhcp_domain": config["dhcp"]["domain"],
         })
 
     if config["ipv6"].as_bool("enable_ipv6"):
