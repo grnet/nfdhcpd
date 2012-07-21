@@ -1,7 +1,8 @@
 domain ip {
 	table mangle {
 		chain PREROUTING {
-			proto udp dport 67 NFQUEUE queue-num 42;
+			interface tap+ proto udp dport 67 NFQUEUE queue-num 42;
+			interface prv+ proto udp dport 67 NFQUEUE queue-num 42;
 		}
 	}
 }
@@ -9,8 +10,8 @@ domain ip {
 domain ip6 {
 	table mangle {
 		chain PREROUTING {
-			proto icmpv6 icmpv6-type router-solicitation NFQUEUE queue-num 43;
-			proto icmpv6 icmpv6-type neighbour-solicitation NFQUEUE queue-num 44;
+			interface tap+ proto icmpv6 icmpv6-type router-solicitation NFQUEUE queue-num 43;
+			interface tap+ proto icmpv6 icmpv6-type neighbour-solicitation NFQUEUE queue-num 44;
 		}
 	}
 }
