@@ -449,18 +449,22 @@ class VMNetProxy(object): # pylint: disable=R0902
         tap = os.path.basename(path)
 
         logging.debug("Updating configuration for %s", tap)
-        binding = parse_binding_file(path)
-        if binding is None:
+        b = parse_binding_file(path)
+        if b is None:
             return
-        ifindex = self.get_ifindex(binding.tap)
+        ifindex = self.get_ifindex(b.tap)
 
         if ifindex is None:
             logging.warn("Stale configuration for %s found", tap)
         else:
-            if binding.is_valid():
-                self.clients[binding.mac] = binding
-                logging.debug("Added client %s on %s", binding.hostname, tap)
-        logging.debug("clients %s", self.clients.keys())
+            if b.is_valid():
+                self.clients[b.mac] = b
+                logging.debug("Added client:")
+                logging.debug("%10s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
+        logging.debug("%10s %20s %7s %15s", 'Client', 'MAC', 'TAP', 'IP')
+        for mac in self.clients.keys():
+          b = self.clients[mac]
+          logging.debug("%10s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
 
     def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
@@ -468,9 +472,11 @@ class VMNetProxy(object): # pylint: disable=R0902
         """
         for b in self.clients.values():
             if b.tap == tap:
+                #os.remove(self.data_path+'/'+tap)
+                logging.debug("Removed interface %s", self.data_path+'/'+tap)
+                logging.debug("%10s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
                 del b
 
-        logging.debug("Removed interface %s", tap)
 
     def dhcp_response(self, i, payload): # pylint: disable=W0613,R0914
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
