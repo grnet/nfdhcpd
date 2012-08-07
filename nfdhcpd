@@ -120,6 +120,7 @@ DHCP_REQRESP = {
 def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
+        logging.debug("get_physindev %s", indev_ifindex)
         if indev_ifindex:
             logging.debug("Incomming packet from bridge %s", indev_ifindex)
             return indev_ifindex
@@ -136,8 +137,10 @@ def get_indev(payload):
 def get_binding(proxy, ifindex, mac):
     try:
         if proxy.mac_indexed_clients:
+            logging.debug("get_binding for mac %s", mac)
             b = proxy.clients[mac]
         else:
+            logging.debug("get_binding for ifindex %s", ifindex)
             b = proxy.clients[ifindex]
         return b
     except KeyError:
@@ -413,6 +416,11 @@ class VMNetProxy(object): # pylint: disable=R0902
         for path in glob.glob(os.path.join(self.data_path, "*")):
             self.add_tap(path)
 
+        logging.debug("\n\n\n\n\n")
+        logging.debug("%10s %20s %7s %15s", 'Client', 'MAC', 'TAP', 'IP')
+        for b in self.clients.values():
+            logging.debug("%10s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
+
     def get_ifindex(self, iface):
         """ Get the interface index from sysfs
 
@@ -497,10 +505,6 @@ class VMNetProxy(object): # pylint: disable=R0902
                 logging.debug("Added client:")
                 logging.debug("%5s: %10s %20s %7s %15s",
                                ifindex, b.hostname, b.mac, b.tap, b.ip)
-        logging.debug("\n\n\n\n\n")
-        logging.debug("%10s %20s %7s %15s", 'Client', 'MAC', 'TAP', 'IP')
-        for b in self.clients.values():
-            logging.debug("%10s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
 
     def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
@@ -508,7 +512,8 @@ class VMNetProxy(object): # pylint: disable=R0902
         """
         try:
             for k in self.clients.keys():
-                if self.clients[k].tap = tap:
+                b = self.clients[k]
+                if self.clients[k].tap == tap:
                     logging.debug("Removing client on interface %s", tap)
                     logging.debug("%10s %20s %7s %15s",
                                   b.hostname, b.mac, b.tap, b.ip)
@@ -538,7 +543,7 @@ class VMNetProxy(object): # pylint: disable=R0902
 
         indev = get_indev(payload)
 
-        binding = get_binding(self, indev, mac) 
+        binding = get_binding(self, indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
             # and return
@@ -553,7 +558,7 @@ class VMNetProxy(object): # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn("Recieved spoofed DHCP request for mac %s from tap %s", mac, tap)
+            logging.warn("Recieved spoofed DHCP request for mac %s from tap %s", mac, indev)
             return
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
@@ -626,7 +631,13 @@ class VMNetProxy(object): # pylint: disable=R0902
 
         logging.info("%s to %s (%s) on %s", DHCP_TYPES[resp_type], mac,
                      binding.ip, binding.tap)
-        self.sendp(resp, binding.indev)
+        try:
+            self.sendp(resp, binding.indev)
+        except socket.error, e:
+            logging.warn("DHCP response on %s failed: %s", binding.indev, str(e))
+        except Exception, e:
+            logging.warn("Unkown error during DHCP response on %s: %s",
+                         binding.indev, str(e))
 
     def rs_response(self, i, payload): # pylint: disable=W0613
         """ Generate a reply to a BOOTP/DHCP request
@@ -635,7 +646,12 @@ class VMNetProxy(object): # pylint: disable=R0902
         pkt = IPv6(payload.get_data())
         logging.debug("IN RS RESPONCE")
         #logging.debug(pkt.show())
-        mac = pkt.lladdr
+        try:
+            mac = pkt.lladdr
+        except:
+            logging.debug("Cannot obtain lladdr in rs")
+            return
+
         logging.debug("rs for mac %s", mac)
 
         indev = get_indev(payload)
@@ -677,7 +693,13 @@ class VMNetProxy(object): # pylint: disable=R0902
                                      lifetime=self.ra_period * 3)
 
         logging.info("RA on %s for %s", binding.indev, subnet.net)
-        self.sendp(resp, binding.indev)
+        try:
+            self.sendp(resp, binding.indev)
+        except socket.error, e:
+            logging.warn("RA on %s failed: %s", binding.indev, str(e))
+        except Exception, e:
+            logging.warn("Unkown error during RA on %s: %s",
+                         binding.indev, str(e))
 
     def ns_response(self, i, payload): # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbor solicitation
@@ -685,8 +707,12 @@ class VMNetProxy(object): # pylint: disable=R0902
         """
         ns = IPv6(payload.get_data())
         logging.debug("IN NS RESPONCE")
-        logging.debug(ns.show())
-        mac = ns.lladdr
+        #logging.debug(ns.show())
+        try:
+            mac = ns.lladdr
+        except:
+            logging.debug("Cannot obtain lladdr from ns")
+            return
 
         logging.debug("dst %s  tgt %s" , ns.dst, ns.tgt)
 
@@ -729,7 +755,13 @@ class VMNetProxy(object): # pylint: disable=R0902
                ICMPv6NDOptDstLLAddr(lladdr=indevmac)
 
         logging.info("NA on %s for %s", binding.indev, ns.tgt)
-        self.sendp(resp, binding.indev)
+        try:
+            self.sendp(resp, binding.indev)
+        except socket.error, e:
+            logging.warn("NA on %s failed: %s", binding.indev, str(e))
+        except Exception, e:
+            logging.warn("Unkown error during periodic NA on %s: %s",
+                         binding.indev, str(e))
 
     def send_periodic_ra(self):
         # Use a separate thread as this may take a _long_ time with
