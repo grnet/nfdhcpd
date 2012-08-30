@@ -31,6 +31,7 @@ import traceback
 import subprocess
 
 import daemon
+import daemon.runner
 import daemon.pidlockfile
 import nfqueue
 import pyinotify
@@ -953,6 +954,12 @@ if __name__ == "__main__":
     if opts.daemonize:
         pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
             config["general"]["pidfile"], 10)
+        # Remove any stale PID files, left behind by previous invocations
+        if (daemon.runner.is_pidfile_stale(pidfile) or
+            pidfile.read_pid() is None):
+            logger.warning("Removing stale PID lock file %s", pidfile.path)
+            pidfile.break_lock()
+
 
         d = daemon.DaemonContext(pidfile=pidfile,
                                  stdout=handler.stream,
