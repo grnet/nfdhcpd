@@ -195,9 +195,13 @@ def parse_binding_file(path):
         elif line.startswith("EUI64="):
             eui64 = get_value(line)
 
-    return Client(tap=tap, mac=mac, ip=ip,
+    try:
+        client = Client(tap=tap, mac=mac, ip=ip,
                   hostname=hostname, indev=indev, subnet=subnet,
                   gateway=gateway, subnet6=subnet6, gateway6=gateway6, eui64=eui64 )
+        return client
+    except:
+        return None
 
 class ClientFileHandler(pyinotify.ProcessEvent):
     def __init__(self, server):
@@ -245,7 +249,10 @@ class Client(object):
 class Subnet(object):
     def __init__(self, net=None, gw=None, dev=None):
         if isinstance(net, str):
-            self.net = IPy.IP(net)
+            try:
+                self.net = IPy.IP(net)
+            except:
+                raise Exception
         else:
             self.net = net
         self.gw = gw
