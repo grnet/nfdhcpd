@@ -962,8 +962,7 @@ if __name__ == "__main__":
         pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
             config["general"]["pidfile"], 10)
         # Remove any stale PID files, left behind by previous invocations
-        if (daemon.runner.is_pidfile_stale(pidfile) or
-            pidfile.read_pid() is None):
+        if daemon.runner.is_pidfile_stale(pidfile):
             logger.warning("Removing stale PID lock file %s", pidfile.path)
             pidfile.break_lock()
 
