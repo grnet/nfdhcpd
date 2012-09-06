@@ -967,12 +967,11 @@ if __name__ == "__main__":
             logger.warning("Removing stale PID lock file %s", pidfile.path)
             pidfile.break_lock()
 
-
         d = daemon.DaemonContext(pidfile=pidfile,
+                                 umask=0022,
                                  stdout=handler.stream,
                                  stderr=handler.stream,
                                  files_preserve=[handler.stream])
-        d.umask = 0022
         try:
             d.open()
         except (daemon.pidlockfile.AlreadyLocked, LockTimeout):
