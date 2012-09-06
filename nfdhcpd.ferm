@@ -2,6 +2,7 @@ domain ip {
 	table mangle {
 		chain PREROUTING {
 			interface tap+ proto udp dport 67 NFQUEUE queue-num 42;
+			interface prv+ proto udp dport 67 NFQUEUE queue-num 42;
 		}
 	}
 }
