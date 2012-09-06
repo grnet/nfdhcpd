@@ -543,7 +543,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         """
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
-        logging.debug("IN DHCP RESPONCE")
+        logging.debug("Generating DHCP response")
         #logging.debug(pkt.show())
 
         # Get the client MAC address
@@ -767,7 +767,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return 1
 
-        logging.debug("na ether %s %s", binding.mac, ns.src)
+        logging.debug("Sending NA response to client %s", binding.mac)
         resp = Ether(src=indevmac, dst=binding.mac)/\
                IPv6(src=str(ifll), dst=ns.src)/\
                ICMPv6ND_NA(R=1, O=0, S=1, tgt=ns.tgt)/\
