@@ -684,7 +684,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn("Recieved spoofed RS request for mac %s from tap %s", mac, tap)
+            logging.warn("Received spoofed RS request for mac %s from tap %s",
+                         mac, binding.tap)
             return
 
         subnet = binding.net6
@@ -746,7 +747,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn("Recieved spoofed NS request for mac %s from tap %s", mac, tap)
+            logging.warn("Received spoofed NS request for mac %s from tap %s",
+                         mac, binding.tap)
             return
 
         subnet = binding.net6
