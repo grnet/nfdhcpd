@@ -35,6 +35,7 @@ import daemon.runner
 import daemon.pidlockfile
 import nfqueue
 import pyinotify
+from lockfile import LockTimeout
 
 import IPy
 import socket
@@ -972,7 +973,12 @@ if __name__ == "__main__":
                                  stderr=handler.stream,
                                  files_preserve=[handler.stream])
         d.umask = 0022
-        d.open()
+        try:
+            d.open()
+        except (daemon.pidlockfile.AlreadyLocked, LockTimeout):
+            logger.critical("Failed to lock pidfile %s,"
+                            " another instance running?", pidfile.path)
+            sys.exit(1)
 
     logging.info("Starting up")
 
