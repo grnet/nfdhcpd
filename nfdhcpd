@@ -199,11 +199,12 @@ def parse_binding_file(path):
             eui64 = get_value(line)
 
     try:
-        client = Client(tap=tap, mac=mac, ip=ip,
-                  hostname=hostname, indev=indev, subnet=subnet,
-                  gateway=gateway, subnet6=subnet6, gateway6=gateway6, eui64=eui64 )
-        return client
-    except:
+        return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
+                      indev=indev, subnet=subnet, gateway=gateway,
+                      subnet6=subnet6, gateway6=gateway6, eui64=eui64 )
+    except ValueError:
+        logging.warning("Cannot add client for host %s and IP %s on tap %s",
+                        hostname, ip, tap)
         return None
 
 
@@ -255,8 +256,9 @@ class Subnet(object):
         if isinstance(net, str):
             try:
                 self.net = IPy.IP(net)
-            except:
-                raise Exception
+            except ValueError, e:
+                logging.warning("IPy error: %s", e)
+                raise e
         else:
             self.net = net
         self.gw = gw
@@ -356,9 +358,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #self.ifaces = {}
         #self.v6nets = {}
         self.nfq = {}
-        self.l2socket = socket.socket(socket.AF_PACKET,
-                                      socket.SOCK_RAW, ETH_P_ALL)
-        self.l2socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
+        self.l2socket = self._socket()
 
         # Inotify setup
         self.wm = pyinotify.WatchManager()
@@ -379,6 +379,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if ns_queue_num is not None:
             self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response)
             self.ipv6_enabled = True
+
+    def _socket(self):
+        logging.info("Opening L2 socket")
+        try:
+            s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, ETH_P_ALL)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
+        except socket.error, e:
+            logging.warning("Cannot open socket %s", e)
+        return s
 
     def _cleanup(self):
         """ Free all resources for a graceful exit
@@ -414,13 +423,22 @@ class VMNetProxy(object):  # pylint: disable=R0902
         """ Send a raw packet using a layer-2 socket
 
         """
-        logging.debug("Sending raw packet %s", data)
         if isinstance(data, BasePacket):
             data = str(data)
 
+        logging.debug("Sending raw packet %r", data)
+
         self.l2socket.bind((dev, ETH_P_ALL))
-        count = self.l2socket.send(data)
+        try:
+            count = self.l2socket.send(data, socket.MSG_DONTWAIT)
+        except socket.error, e:
+            logging.warn("Send with MSG_DONTWAIT failed: %s", str(e))
+            self.l2socket.close()
+            self.l2socket = self._socket()
+            raise e
+
         ldata = len(data)
+        logging.debug("Sent %d bytes to device %s", count, dev)
         if count != ldata:
             logging.warn("Truncated send on %s (%d/%d bytes sent)",
                          dev, count, ldata)
@@ -1017,10 +1035,11 @@ if __name__ == "__main__":
 
     # Keep only the capabilities we need
     # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
+    # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
     capng.capng_clear(capng.CAPNG_SELECT_BOTH)
     capng.capng_update(capng.CAPNG_ADD,
                        capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_ADMIN)
+                       capng.CAP_NET_ADMIN | capng.CAP_NET_RAW)
     capng.capng_change_id(uid.pw_uid, uid.pw_gid,
                           capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
 
