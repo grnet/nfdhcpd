@@ -590,7 +590,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn("Recieved spoofed DHCP request for mac %s from tap %s", mac, indev)
+            logging.warn("Received spoofed DHCP request for mac %s, tap %s",
+                         mac, indev)
             return
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
@@ -834,7 +835,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             except socket.error, e:
                 logging.warn("Periodic RA on %s failed: %s", tap, str(e))
             except Exception, e:
-                logging.warn("Unkown error during periodic RA on %s: %s",
+                logging.warn("Unknown error during periodic RA on %s: %s",
                              tap, str(e))
             i += 1
         logging.debug("Sent %d RAs in %.2f seconds", i, time.time() - start)
