@@ -414,7 +414,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         q = nfqueue.queue()
         q.set_callback(callback)
         q.fast_open(queue_num, family)
-        q.set_queue_maxlen(30)
+        q.set_queue_maxlen(5000)
         # This is mandatory for the queue to operate
         q.set_mode(nfqueue.NFQNL_COPY_PACKET)
         self.nfq[q.get_fd()] = q
@@ -427,7 +427,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if isinstance(data, BasePacket):
             data = str(data)
 
-        logging.debug(" - Sending raw packet %s", data)
+        logging.debug(" - Sending raw packet %r", data)
 
         self.l2socket.bind((dev, ETH_P_ALL))
         try:
@@ -1047,10 +1047,17 @@ if __name__ == "__main__":
     # Keep only the capabilities we need
     # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
     # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
+    # CAP_SETPCAP: needed by capng_change_id()
     capng.capng_clear(capng.CAPNG_SELECT_BOTH)
     capng.capng_update(capng.CAPNG_ADD,
                        capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_ADMIN | capng.CAP_NET_RAW)
+                       capng.CAP_NET_ADMIN)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_NET_RAW)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_SETPCAP)
     capng.capng_change_id(uid.pw_uid, uid.pw_gid,
                           capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
 
