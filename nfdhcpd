@@ -66,7 +66,7 @@ LOG_FILENAME = "nfdhcpd.log"
 
 SYSFS_NET = "/sys/class/net"
 
-LOG_FORMAT = "%(asctime)-15s %(levelname)-6s %(message)s"
+LOG_FORMAT = "%(asctime)-15s %(levelname)-8s %(message)s"
 
 # Configuration file specification (see configobj documentation)
 CONFIG_SPEC = """
@@ -976,6 +976,29 @@ if __name__ == "__main__":
                               ", ".join(section_list))
         sys.exit(1)
 
+    try:
+        uid = getpwuid(config["general"].as_int("user"))
+    except ValueError:
+        uid = getpwnam(config["general"]["user"])
+
+    # Keep only the capabilities we need
+    # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
+    # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
+    # CAP_SETPCAP: needed by capng_change_id()
+    capng.capng_clear(capng.CAPNG_SELECT_BOTH)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_NET_ADMIN)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_NET_RAW)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_SETPCAP)
+    # change uid
+    capng.capng_change_id(uid.pw_uid, uid.pw_gid,
+                          capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
+
     logger = logging.getLogger()
     if opts.debug:
         logger.setLevel(logging.DEBUG)
@@ -1021,6 +1044,8 @@ if __name__ == "__main__":
             sys.exit(1)
 
     logging.info("Starting up")
+    logging.info("Running as %s (uid:%d, gid: %d)",
+                  config["general"]["user"], uid.pw_uid, uid.pw_gid)
 
     proxy_opts = {}
     if config["dhcp"].as_bool("enable_dhcp"):
@@ -1043,33 +1068,6 @@ if __name__ == "__main__":
 
     # pylint: disable=W0142
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)
-
-    # Drop all capabilities except CAP_NET_RAW and change uid
-    try:
-        uid = getpwuid(config["general"].as_int("user"))
-    except ValueError:
-        uid = getpwnam(config["general"]["user"])
-
-    logging.debug("Setting capabilities and changing uid")
-    logging.debug("User: %s, uid: %d, gid: %d",
-                  config["general"]["user"], uid.pw_uid, uid.pw_gid)
-
-    # Keep only the capabilities we need
-    # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
-    # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
-    # CAP_SETPCAP: needed by capng_change_id()
-    capng.capng_clear(capng.CAPNG_SELECT_BOTH)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_ADMIN)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_RAW)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_SETPCAP)
-    capng.capng_change_id(uid.pw_uid, uid.pw_gid,
-                          capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
 
     logging.info("Ready to serve requests")
     try:
