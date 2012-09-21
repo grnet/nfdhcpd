@@ -35,6 +35,7 @@ import daemon.runner
 import daemon.pidlockfile
 import nfqueue
 import pyinotify
+import setproctitle
 from lockfile import LockTimeout
 
 import IPy
@@ -51,6 +52,7 @@ from scapy.layers.inet6 import IPv6, ICMPv6ND_RA, ICMPv6ND_NA, \
                                ICMPv6NDOptPrefixInfo, \
                                ICMPv6NDOptRDNSS
 from scapy.layers.dhcp import BOOTP, DHCP
+
 
 DEFAULT_CONFIG = "/etc/nfdhcpd/nfdhcpd.conf"
 DEFAULT_PATH = "/var/run/ganeti-dhcpd"
@@ -989,6 +991,10 @@ if __name__ == "__main__":
 
     handler.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(handler)
+
+    # Rename this process so 'ps' output looks like
+    # this is a native executable
+    setproctitle.setproctitle(" ".join(sys.argv))
 
     if opts.daemonize:
         pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
