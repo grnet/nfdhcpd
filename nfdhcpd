@@ -993,8 +993,12 @@ if __name__ == "__main__":
     logger.addHandler(handler)
 
     # Rename this process so 'ps' output looks like
-    # this is a native executable
-    setproctitle.setproctitle(" ".join(sys.argv))
+    # this is a native executable.
+    # NOTE: due to a bug in python-setproctitle, one cannot yet
+    # set individual values for command-line arguments, so only show
+    # the name of the executable instead.
+    # setproctitle.setproctitle("\x00".join(sys.argv))
+    setproctitle.setproctitle(sys.argv[0])
 
     if opts.daemonize:
         pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
