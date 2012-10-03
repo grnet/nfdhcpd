@@ -125,7 +125,7 @@ def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
         if indev_ifindex:
-            logging.debug(" - Incomming packet from bridge %s", indev_ifindex)
+            logging.debug(" - Incoming packet from bridge %s", indev_ifindex)
             return indev_ifindex
     except AttributeError:
         #TODO: return error value
@@ -133,7 +133,7 @@ def get_indev(payload):
         return 0
 
     indev_ifindex = payload.get_indev()
-    logging.debug(" - Incomming packet from tap %s", indev_ifindex)
+    logging.debug(" - Incoming packet from tap %s", indev_ifindex)
 
     return indev_ifindex
 
@@ -548,13 +548,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         """
         try:
-            for k in self.clients.keys():
-                b = self.clients[k]
-                if self.clients[k].tap == tap:
+            for cl in self.clients.values():
+                if cl.tap == tap:
                     logging.debug("Removing client on interface %s", tap)
-                    logging.debug(" - %5s: %10s %20s %7s %15s",
-                                  k, b.hostname, b.mac, b.tap, b.ip)
-                    del self.clients[k]
+                    logging.debug(" - %10s %20s %7s %15s",
+                                  cl.hostname, cl.mac, cl.tap, cl.ip)
+                    del cl
         except:
             logging.debug("Client on %s disappeared!!!", tap)
 
@@ -747,7 +746,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         """
 
-        logging.debug(" * Processing pending NS request (NFQuEUE %d)", i)
+        logging.debug(" * Processing pending NS request (NFQUEUE %d)", i)
 
         ns = IPv6(payload.get_data())
         #logging.debug(ns.show())
@@ -1007,8 +1006,7 @@ if __name__ == "__main__":
 
     if opts.daemonize:
         logfile = os.path.join(config["general"]["logdir"], LOG_FILENAME)
-        handler = logging.handlers.RotatingFileHandler(logfile,
-                                                       maxBytes=2097152)
+        handler = logging.handlers.WatchedFileHandler(logfile)
     else:
         handler = logging.StreamHandler()
 
