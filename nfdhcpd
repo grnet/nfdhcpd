@@ -20,6 +20,8 @@
 #
 
 import os
+import signal
+import errno
 import re
 import sys
 import glob
@@ -40,7 +42,7 @@ from lockfile import LockTimeout
 
 import IPy
 import socket
-from select import select
+import select
 from socket import AF_INET, AF_INET6
 
 from scapy.data import ETH_P_ALL
@@ -452,9 +454,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         for path in glob.glob(os.path.join(self.data_path, "*")):
             self.add_tap(path)
 
-        logging.debug("%15s %20s %7s %15s", 'Client', 'MAC', 'TAP', 'IP')
-        for b in self.clients.values():
-            logging.debug("%15s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
+        self.print_clients()
 
     def get_ifindex(self, iface):
         """ Get the interface index from sysfs
@@ -548,12 +548,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         """
         try:
-            for cl in self.clients.values():
+            for k, cl in self.clients.items():
                 if cl.tap == tap:
                     logging.debug("Removing client on interface %s", tap)
-                    logging.debug(" - %10s %20s %7s %15s",
-                                  cl.hostname, cl.mac, cl.tap, cl.ip)
-                    del cl
+                    logging.debug("%10s | %10s %20s %10s %20s",
+                                  k, cl.hostname, cl.mac, cl.tap, cl.ip)
+                    del self.clients[k]
         except:
             logging.debug("Client on %s disappeared!!!", tap)
 
@@ -874,7 +874,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
             timeout = None
 
         while True:
-            rlist, _, xlist = select(self.nfq.keys() + [iwfd], [], [], timeout)
+            try:
+                rlist, _, xlist = select.select(self.nfq.keys() + [iwfd], [], [], timeout)
+            except select.error, e:
+                if e[0] == errno.EINTR:
+                    logging.debug("select() got interrupted")
+                    continue
+
             if xlist:
                 logging.warn("Warning: Exception on %s",
                              ", ".join([str(fd) for fd in xlist]))
@@ -908,6 +914,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     start = time.time()
                     self.send_periodic_ra()
                     timeout = self.ra_period - (time.time() - start)
+
+    def print_clients(self):
+        logging.info("%10s   %20s %20s %10s %20s",'Key', 'Client', 'MAC', 'TAP', 'IP')
+        for k, cl in self.clients.items():
+            logging.info("%10s | %20s %20s %10s %20s", k, cl.hostname, cl.mac, cl.tap, cl.ip)
+
 
 
 if __name__ == "__main__":
@@ -1068,6 +1080,16 @@ if __name__ == "__main__":
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)
 
     logging.info("Ready to serve requests")
+
+
+    def handler(signum, frame):
+        logging.debug('Received SIGUSR1. Printing current proxy state...')
+        proxy.print_clients()
+
+    # Set the signal handler for debuging clients
+    signal.signal(signal.SIGUSR1, handler)
+    signal.siginterrupt(signal.SIGUSR1, False)
+
     try:
         proxy.serve()
     except Exception:
