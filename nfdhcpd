@@ -376,14 +376,14 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         # NFQUEUE setup
         if dhcp_queue_num is not None:
-            self._setup_nfqueue(dhcp_queue_num, AF_INET, self.dhcp_response)
+            self._setup_nfqueue(dhcp_queue_num, AF_INET, self.dhcp_response, 5000)
 
         if rs_queue_num is not None:
-            self._setup_nfqueue(rs_queue_num, AF_INET6, self.rs_response)
+            self._setup_nfqueue(rs_queue_num, AF_INET6, self.rs_response, 10)
             self.ipv6_enabled = True
 
         if ns_queue_num is not None:
-            self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response)
+            self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response, 10)
             self.ipv6_enabled = True
 
     def _socket(self):
@@ -413,7 +413,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         logging.info(" - Cleanup finished")
 
-    def _setup_nfqueue(self, queue_num, family, callback):
+    def _setup_nfqueue(self, queue_num, family, callback, pending):
         logging.info("Setting up NFQUEUE for queue %d, AF %s",
                       queue_num, family)
         q = nfqueue.queue()
@@ -422,7 +422,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         q.set_queue_maxlen(5000)
         # This is mandatory for the queue to operate
         q.set_mode(nfqueue.NFQNL_COPY_PACKET)
-        self.nfq[q.get_fd()] = q
+        self.nfq[q.get_fd()] = (q, pending)
         logging.debug(" - Successfully set up NFQUEUE %d", queue_num)
 
     def sendp(self, data, dev):
@@ -898,7 +898,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
                 for fd in rlist:
                     try:
-                        cnt = self.nfq[fd].process_pending(10)
+                        q, num = self.nfq[fd]
+                        cnt = q.process_pending(num)
                         logging.debug(" * Processed %d requests on NFQUEUE"
                                       " with fd %d", cnt, fd)
                     except RuntimeError, e:
