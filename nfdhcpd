@@ -127,7 +127,8 @@ def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
         if indev_ifindex:
-            logging.debug(" - Incoming packet from bridge %s", indev_ifindex)
+            logging.debug(" - Incoming packet from bridge with ifindex %s",
+                          indev_ifindex)
             return indev_ifindex
     except AttributeError:
         #TODO: return error value
@@ -135,7 +136,7 @@ def get_indev(payload):
         return 0
 
     indev_ifindex = payload.get_indev()
-    logging.debug(" - Incoming packet from tap %s", indev_ifindex)
+    logging.debug(" - Incoming packet from tap with ifindex %s", indev_ifindex)
 
     return indev_ifindex
 
@@ -557,11 +558,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except:
             logging.debug("Client on %s disappeared!!!", tap)
 
-    def dhcp_response(self, i, payload):  # pylint: disable=W0613,R0914
+    def dhcp_response(self, dummy, payload):  # pylint: disable=W0613,R0914
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
         """
-        logging.debug(" * Processing pending DHCP request (NFQUEUE %d)", i)
+        logging.debug(" * Processing pending DHCP request")
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
         #logging.debug(pkt.show())
@@ -677,11 +678,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - Unkown error during DHCP response on %s: %s",
                          binding.indev, str(e))
 
-    def rs_response(self, i, payload):  # pylint: disable=W0613
+    def rs_response(self, dummy, payload):  # pylint: disable=W0613
         """ Generate a reply to a BOOTP/DHCP request
 
         """
-        logging.debug(" * Processing pending RS request (NFQUEUE %d)", i)
+        logging.debug(" * Processing pending RS request")
         pkt = IPv6(payload.get_data())
         #logging.debug(pkt.show())
         try:
@@ -741,12 +742,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - Unkown error during RA on %s: %s",
                          binding.indev, str(e))
 
-    def ns_response(self, i, payload):  # pylint: disable=W0613
+    def ns_response(self, dummy, payload):  # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbor solicitation
 
         """
 
-        logging.debug(" * Processing pending NS request (NFQUEUE %d)", i)
+        logging.debug(" * Processing pending NS request")
 
         ns = IPv6(payload.get_data())
         #logging.debug(ns.show())
@@ -897,7 +898,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
                 for fd in rlist:
                     try:
-                        cnt = self.nfq[fd].process_pending()
+                        cnt = self.nfq[fd].process_pending(10)
                         logging.debug(" * Processed %d requests on NFQUEUE"
                                       " with fd %d", cnt, fd)
                     except RuntimeError, e:
