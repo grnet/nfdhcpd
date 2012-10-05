@@ -20,6 +20,8 @@
 #
 
 import os
+import signal
+import errno
 import re
 import sys
 import glob
@@ -40,7 +42,7 @@ from lockfile import LockTimeout
 
 import IPy
 import socket
-from select import select
+import select
 from socket import AF_INET, AF_INET6
 
 from scapy.data import ETH_P_ALL
@@ -66,7 +68,7 @@ LOG_FILENAME = "nfdhcpd.log"
 
 SYSFS_NET = "/sys/class/net"
 
-LOG_FORMAT = "%(asctime)-15s %(levelname)-6s %(message)s"
+LOG_FORMAT = "%(asctime)-15s %(levelname)-8s %(message)s"
 
 # Configuration file specification (see configobj documentation)
 CONFIG_SPEC = """
@@ -125,7 +127,8 @@ def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
         if indev_ifindex:
-            logging.debug(" - Incomming packet from bridge %s", indev_ifindex)
+            logging.debug(" - Incoming packet from bridge with ifindex %s",
+                          indev_ifindex)
             return indev_ifindex
     except AttributeError:
         #TODO: return error value
@@ -133,7 +136,7 @@ def get_indev(payload):
         return 0
 
     indev_ifindex = payload.get_indev()
-    logging.debug(" - Incomming packet from tap %s", indev_ifindex)
+    logging.debug(" - Incoming packet from tap with ifindex %s", indev_ifindex)
 
     return indev_ifindex
 
@@ -248,10 +251,45 @@ class Client(object):
         self.gateway6 = gateway6
         self.net6 = Subnet(net=subnet6, gw=gateway6, dev=tap)
         self.eui64 = eui64
+        self.open_socket()
 
     def is_valid(self):
         return self.mac is not None and self.ip is not None\
                and self.hostname is not None
+
+
+    def open_socket(self):
+
+        logging.info(" - Opening L2 socket and binding to %s", self.tap)
+        try:
+            s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, ETH_P_ALL)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
+            s.bind((self.tap, ETH_P_ALL))
+            self.socket = s
+        except socket.error, e:
+            logging.warning(" - Cannot open socket %s", e)
+
+
+    def sendp(self, data):
+
+        if isinstance(data, BasePacket):
+            data = str(data)
+
+        logging.debug(" - Sending raw packet %r", data)
+
+        try:
+            count = self.socket.send(data, socket.MSG_DONTWAIT)
+        except socket.error, e:
+            logging.warn(" - Send with MSG_DONTWAIT failed: %s", str(e))
+            self.socket.close()
+            self.open_socket()
+            raise e
+
+        ldata = len(data)
+        logging.debug(" - Sent %d bytes on %s", count, self.tap)
+        if count != ldata:
+            logging.warn(" - Truncated msg: %d/%d bytes sent",
+                         count, ldata)
 
 
 class Subnet(object):
@@ -361,7 +399,6 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #self.ifaces = {}
         #self.v6nets = {}
         self.nfq = {}
-        self.l2socket = self._socket()
 
         # Inotify setup
         self.wm = pyinotify.WatchManager()
@@ -373,24 +410,16 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         # NFQUEUE setup
         if dhcp_queue_num is not None:
-            self._setup_nfqueue(dhcp_queue_num, AF_INET, self.dhcp_response)
+            self._setup_nfqueue(dhcp_queue_num, AF_INET, self.dhcp_response, 0)
 
         if rs_queue_num is not None:
-            self._setup_nfqueue(rs_queue_num, AF_INET6, self.rs_response)
+            self._setup_nfqueue(rs_queue_num, AF_INET6, self.rs_response, 10)
             self.ipv6_enabled = True
 
         if ns_queue_num is not None:
-            self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response)
+            self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response, 10)
             self.ipv6_enabled = True
 
-    def _socket(self):
-        logging.info("Opening L2 socket")
-        try:
-            s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, ETH_P_ALL)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
-        except socket.error, e:
-            logging.warning(" - Cannot open socket %s", e)
-        return s
 
     def _cleanup(self):
         """ Free all resources for a graceful exit
@@ -399,18 +428,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info("Cleaning up")
 
         logging.debug(" - Closing netfilter queues")
-        for q in self.nfq.values():
+        for q, num in self.nfq.values():
             q.close()
-
-        logging.debug(" - Closing socket")
-        self.l2socket.close()
 
         logging.debug(" - Stopping inotify watches")
         self.notifier.stop()
 
         logging.info(" - Cleanup finished")
 
-    def _setup_nfqueue(self, queue_num, family, callback):
+    def _setup_nfqueue(self, queue_num, family, callback, pending):
         logging.info("Setting up NFQUEUE for queue %d, AF %s",
                       queue_num, family)
         q = nfqueue.queue()
@@ -419,32 +445,17 @@ class VMNetProxy(object):  # pylint: disable=R0902
         q.set_queue_maxlen(5000)
         # This is mandatory for the queue to operate
         q.set_mode(nfqueue.NFQNL_COPY_PACKET)
-        self.nfq[q.get_fd()] = q
+        self.nfq[q.get_fd()] = (q, pending)
         logging.debug(" - Successfully set up NFQUEUE %d", queue_num)
 
-    def sendp(self, data, dev):
+    def sendp(self, data, binding):
         """ Send a raw packet using a layer-2 socket
 
         """
-        if isinstance(data, BasePacket):
-            data = str(data)
+        logging.info(" - Sending raw packet on %s (%s)",
+                     binding.tap, binding.hostname)
+        binding.sendp(data)
 
-        logging.debug(" - Sending raw packet %r", data)
-
-        self.l2socket.bind((dev, ETH_P_ALL))
-        try:
-            count = self.l2socket.send(data, socket.MSG_DONTWAIT)
-        except socket.error, e:
-            logging.warn(" - Send with MSG_DONTWAIT failed: %s", str(e))
-            self.l2socket.close()
-            self.l2socket = self._socket()
-            raise e
-
-        ldata = len(data)
-        logging.debug(" - Sent %d bytes to device %s", count, dev)
-        if count != ldata:
-            logging.warn(" - Truncated send on %s (%d/%d bytes sent)",
-                         dev, count, ldata)
 
     def build_config(self):
         self.clients.clear()
@@ -452,9 +463,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         for path in glob.glob(os.path.join(self.data_path, "*")):
             self.add_tap(path)
 
-        logging.debug("%15s %20s %7s %15s", 'Client', 'MAC', 'TAP', 'IP')
-        for b in self.clients.values():
-            logging.debug("%15s %20s %7s %15s", b.hostname, b.mac, b.tap, b.ip)
+        self.print_clients()
 
     def get_ifindex(self, iface):
         """ Get the interface index from sysfs
@@ -525,7 +534,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         """
         tap = os.path.basename(path)
 
-        logging.debug("Updating configuration for %s", tap)
+        logging.info("Updating configuration for %s", tap)
         b = parse_binding_file(path)
         if b is None:
             return
@@ -548,21 +557,23 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         """
         try:
-            for k in self.clients.keys():
-                b = self.clients[k]
-                if self.clients[k].tap == tap:
-                    logging.debug("Removing client on interface %s", tap)
-                    logging.debug(" - %5s: %10s %20s %7s %15s",
-                                  k, b.hostname, b.mac, b.tap, b.ip)
+            for k, cl in self.clients.items():
+                if cl.tap == tap:
+                    logging.info("Removing client %s and closing socket on %s",
+                                 cl.hostname, cl.tap)
+                    logging.debug(" - %10s | %10s %20s %10s %20s",
+                                  k, cl.hostname, cl.mac, cl.tap, cl.ip)
+                    cl.socket.close()
                     del self.clients[k]
         except:
             logging.debug("Client on %s disappeared!!!", tap)
 
-    def dhcp_response(self, i, payload):  # pylint: disable=W0613,R0914
+
+    def dhcp_response(self, dummy, payload):  # pylint: disable=W0613,R0914
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
         """
-        logging.debug(" * Processing pending DHCP request (NFQUEUE %d)", i)
+        logging.info(" * Processing pending DHCP request")
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
         #logging.debug(pkt.show())
@@ -596,7 +607,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - Recieved spoofed DHCP request for mac %s from tap %s", mac, indev)
             return
 
-        logging.debug(" - Generating DHCP response for host %s (mac %s) on tap %s",
+        logging.info(" - Generating DHCP response for host %s (mac %s) on tap %s",
                        binding.hostname, mac, binding.tap)
 
 
@@ -671,18 +682,19 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - %s to %s (%s) on %s", DHCP_TYPES[resp_type], mac,
                      binding.ip, binding.tap)
         try:
-            self.sendp(resp, binding.indev)
+            self.sendp(resp, binding)
         except socket.error, e:
-            logging.warn(" - DHCP response on %s failed: %s", binding.indev, str(e))
+            logging.warn(" - DHCP response on %s (%s) failed: %s",
+                         binding.tap, binding.hostname, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during DHCP response on %s: %s",
-                         binding.indev, str(e))
+            logging.warn(" - Unkown error during DHCP response on %s (%s): %s",
+                         binding.tap, binding.hostname, str(e))
 
-    def rs_response(self, i, payload):  # pylint: disable=W0613
+    def rs_response(self, dummy, payload):  # pylint: disable=W0613
         """ Generate a reply to a BOOTP/DHCP request
 
         """
-        logging.debug(" * Processing pending RS request (NFQUEUE %d)", i)
+        logging.info(" * Processing pending RS request")
         pkt = IPv6(payload.get_data())
         #logging.debug(pkt.show())
         try:
@@ -722,7 +734,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if ifll is None:
             return
 
-        logging.debug(" - Generating RA for host %s (mac %s) on tap %s",
+        logging.info(" - Generating RA for host %s (mac %s) on tap %s",
                       binding.hostname, mac, binding.tap)
 
         resp = Ether(src=indevmac)/\
@@ -735,19 +747,20 @@ class VMNetProxy(object):  # pylint: disable=R0902
                                      lifetime=self.ra_period * 3)
 
         try:
-            self.sendp(resp, binding.indev)
+            self.sendp(resp, binding)
         except socket.error, e:
-            logging.warn(" - RA on %s failed: %s", binding.indev, str(e))
+            logging.warn(" - RA on %s (%s) failed: %s",
+                         binding.tap, binding.hostname, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during RA on %s: %s",
-                         binding.indev, str(e))
+            logging.warn(" - Unkown error during RA on %s (%s): %s",
+                         binding.tap, binding.hostname, str(e))
 
-    def ns_response(self, i, payload):  # pylint: disable=W0613
+    def ns_response(self, dummy, payload):  # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbor solicitation
 
         """
 
-        logging.debug(" * Processing pending NS request (NFQuEUE %d)", i)
+        logging.info(" * Processing pending NS request")
 
         ns = IPv6(payload.get_data())
         #logging.debug(ns.show())
@@ -793,8 +806,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.debug(" - Received NS for a non-routable IP (%s)", ns.tgt)
             return 1
 
-        logging.debug(" - Generating NA for host %s (mac %s) on tap %s",
-                      binding.hostname, mac, binding.tap)
+        logging.info(" - Generating NA for host %s (mac %s) on tap %s",
+                     binding.hostname, mac, binding.tap)
 
         resp = Ether(src=indevmac, dst=binding.mac)/\
                IPv6(src=str(ifll), dst=ns.src)/\
@@ -802,12 +815,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
                ICMPv6NDOptDstLLAddr(lladdr=indevmac)
 
         try:
-            self.sendp(resp, binding.indev)
+            self.sendp(resp, binding)
         except socket.error, e:
-            logging.warn(" - NA on %s failed: %s", binding.indev, str(e))
+            logging.warn(" - NA on %s (%s) failed: %s",
+                         bindig.tap, binding.hostname, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during periodic NA on %s: %s",
-                         binding.indev, str(e))
+            logging.warn(" - Unkown error during periodic NA to %s (%s): %s",
+                         binding.tap, binding.hostname, str(e))
 
     def send_periodic_ra(self):
         # Use a separate thread as this may take a _long_ time with
@@ -815,7 +829,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         threading.Thread(target=self._send_periodic_ra).start()
 
     def _send_periodic_ra(self):
-        logging.debug("Sending out periodic RAs")
+        logging.info("Sending out periodic RAs")
         start = time.time()
         i = 0
         for binding in self.clients.values():
@@ -839,14 +853,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                          lifetime=self.ra_period * 3)
             try:
-                self.sendp(resp, indev)
+                self.sendp(resp, binding)
             except socket.error, e:
-                logging.warn(" - Periodic RA on %s failed: %s", tap, str(e))
+                logging.warn(" - Periodic RA on %s (%s) failed: %s",
+                             tap, binding.hostname, str(e))
             except Exception, e:
-                logging.warn(" - Unkown error during periodic RA on %s: %s",
-                             tap, str(e))
+                logging.warn(" - Unkown error during periodic RA on %s (%s):"
+                             " %s", tap, binding.hostname, str(e))
             i += 1
-        logging.debug(" - Sent %d RAs in %.2f seconds", i, time.time() - start)
+        logging.info(" - Sent %d RAs in %.2f seconds", i, time.time() - start)
 
     def serve(self):
         """ Safely perform the main loop, freeing all resources upon exit
@@ -875,7 +890,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
             timeout = None
 
         while True:
-            rlist, _, xlist = select(self.nfq.keys() + [iwfd], [], [], timeout)
+            try:
+                rlist, _, xlist = select.select(self.nfq.keys() + [iwfd], [], [], timeout)
+            except select.error, e:
+                if e[0] == errno.EINTR:
+                    logging.debug("select() got interrupted")
+                    continue
+
             if xlist:
                 logging.warn("Warning: Exception on %s",
                              ", ".join([str(fd) for fd in xlist]))
@@ -892,7 +913,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
                 for fd in rlist:
                     try:
-                        cnt = self.nfq[fd].process_pending()
+                        q, num = self.nfq[fd]
+                        cnt = q.process_pending(num)
                         logging.debug(" * Processed %d requests on NFQUEUE"
                                       " with fd %d", cnt, fd)
                     except RuntimeError, e:
@@ -909,6 +931,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     start = time.time()
                     self.send_periodic_ra()
                     timeout = self.ra_period - (time.time() - start)
+
+    def print_clients(self):
+        logging.info("%10s   %20s %20s %10s %20s",'Key', 'Client', 'MAC', 'TAP', 'IP')
+        for k, cl in self.clients.items():
+            logging.info("%10s | %20s %20s %10s %20s", k, cl.hostname, cl.mac, cl.tap, cl.ip)
+
 
 
 if __name__ == "__main__":
@@ -976,6 +1004,29 @@ if __name__ == "__main__":
                               ", ".join(section_list))
         sys.exit(1)
 
+    try:
+        uid = getpwuid(config["general"].as_int("user"))
+    except ValueError:
+        uid = getpwnam(config["general"]["user"])
+
+    # Keep only the capabilities we need
+    # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
+    # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
+    # CAP_SETPCAP: needed by capng_change_id()
+    capng.capng_clear(capng.CAPNG_SELECT_BOTH)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_NET_ADMIN)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_NET_RAW)
+    capng.capng_update(capng.CAPNG_ADD,
+                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
+                       capng.CAP_SETPCAP)
+    # change uid
+    capng.capng_change_id(uid.pw_uid, uid.pw_gid,
+                          capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
+
     logger = logging.getLogger()
     if opts.debug:
         logger.setLevel(logging.DEBUG)
@@ -984,8 +1035,7 @@ if __name__ == "__main__":
 
     if opts.daemonize:
         logfile = os.path.join(config["general"]["logdir"], LOG_FILENAME)
-        handler = logging.handlers.RotatingFileHandler(logfile,
-                                                       maxBytes=2097152)
+        handler = logging.handlers.WatchedFileHandler(logfile)
     else:
         handler = logging.StreamHandler()
 
@@ -1021,6 +1071,8 @@ if __name__ == "__main__":
             sys.exit(1)
 
     logging.info("Starting up")
+    logging.info("Running as %s (uid:%d, gid: %d)",
+                  config["general"]["user"], uid.pw_uid, uid.pw_gid)
 
     proxy_opts = {}
     if config["dhcp"].as_bool("enable_dhcp"):
@@ -1044,34 +1096,17 @@ if __name__ == "__main__":
     # pylint: disable=W0142
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)
 
-    # Drop all capabilities except CAP_NET_RAW and change uid
-    try:
-        uid = getpwuid(config["general"].as_int("user"))
-    except ValueError:
-        uid = getpwnam(config["general"]["user"])
-
-    logging.debug("Setting capabilities and changing uid")
-    logging.debug("User: %s, uid: %d, gid: %d",
-                  config["general"]["user"], uid.pw_uid, uid.pw_gid)
-
-    # Keep only the capabilities we need
-    # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
-    # CAP_NET_RAW: we need to reopen socket in case the buffer gets full
-    # CAP_SETPCAP: needed by capng_change_id()
-    capng.capng_clear(capng.CAPNG_SELECT_BOTH)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_ADMIN)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_NET_RAW)
-    capng.capng_update(capng.CAPNG_ADD,
-                       capng.CAPNG_EFFECTIVE | capng.CAPNG_PERMITTED,
-                       capng.CAP_SETPCAP)
-    capng.capng_change_id(uid.pw_uid, uid.pw_gid,
-                          capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
-
     logging.info("Ready to serve requests")
+
+
+    def handler(signum, frame):
+        logging.debug('Received SIGUSR1. Printing current proxy state...')
+        proxy.print_clients()
+
+    # Set the signal handler for debuging clients
+    signal.signal(signal.SIGUSR1, handler)
+    signal.siginterrupt(signal.SIGUSR1, False)
+
     try:
         proxy.serve()
     except Exception:
