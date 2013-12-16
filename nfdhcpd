@@ -240,8 +240,7 @@ class Client(object):
         self.open_socket()
 
     def is_valid(self):
-        return self.mac is not None and self.ip is not None\
-               and self.hostname is not None
+        return self.mac is not None and self.hostname is not None
 
 
     def open_socket(self):
@@ -604,6 +603,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if mac != binding.mac:
             logging.warn(" - Recieved spoofed DHCP request: mac %s, indev %s",
                          mac, indev)
+            return
+
+        if not binding.ip:
+            logging.info(" - No IP found in binding file.")
             return
 
         logging.info(" - Generating DHCP response:"
