@@ -1,0 +1,8 @@
+/var/log/nfdhcpd/nfdhcpd.log /var/log/nfdhcpd/hooks.log {
+  daily
+  rotate 7
+  missingok
+  notifempty
+  create 644 nobody nogroup
+}
+

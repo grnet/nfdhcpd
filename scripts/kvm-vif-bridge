@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#some definitions/clarifications
+# $INTERFACE is usually a tap* interface
+# $LINK is the link name from the ganeti-network output
+# $IP is the ip address of the VM
+
+#TAP_CONSTANT_MAC=cc:47:52:4e:45:54 # GRNET in hex :-)
+#MAC2EUI64=/usr/bin/mac2eui64
+#NFDHCPD_STATE_DIR=/var/lib/nfdhcpd
+#GANETI_FERM=/var/run/ganeti-ferm
+
+source /etc/default/nfdhcpd
+source /usr/lib/nfdhcpd/common.sh
+
+FROM=FROM${INTERFACE^^}
+TO=TO${INTERFACE^^}
+
+try clear_routed_setup_ipv4
+try clear_routed_setup_ipv6
+try flush_firewall_ganetimgr
+try clear_ebtables
+try clear_nfdhcpd
+
+if [ "$MODE" = "routed" ]; then
+    # special proxy-ARP/NDP routing mode
+    TABLE=$LINK
+    # use a constant predefined MAC address for the tap
+    ip link set $INTERFACE addr $TAP_CONSTANT_MAC up
+    INDEV=$INTERFACE
+    DROPDHCPREQCMD="iptables -A FORWARD -i $INTERFACE -p udp --dport 67 -j DROP"
+
+    # Enable forwarding
+    echo 1 > /proc/sys/net/ipv4/conf/$INTERFACE/forwarding
+    echo 1 > /proc/sys/net/ipv6/conf/$INTERFACE/forwarding
+
+elif [ "$MODE" = "bridged" ]; then
+    ip link set $INTERFACE up
+    brctl addif $BRIDGE $INTERFACE
+    INDEV=$BRIDGE
+    try init_ebtables > /dev/null 2>&1
+    # ViMa bridged networks should not drop DHCP requests
+    # DROPDHCPREQCMD="ebtables -A $FROM -p ipv4 --ip-protocol udp --ip-destination-port 67 -j DROP"
+    DROPDHCPREQCMD=""
+fi
+
+if [ "x$NETWORK_TAGS" == "x" ]; then
+     NETWORK_TAGS='ip-less-routed nfdhcpd'
+fi
+
+for tag in $NETWORK_TAGS; do
+  case $tag in
+  $IP_LESS_ROUTED_TAG)
+    try routed_setup_ipv4 > /dev/null 2>&1
+    try routed_setup_ipv6 > /dev/null 2>&1
+    try setup_firewall_ganetimgr > /dev/null 2>&1
+  ;;
+  $NFDHCPD_TAG)
+    # Drop unicast BOOTP/DHCP packets
+    $DROPDHCPREQCMD > /dev/null 2>&1
+    try setup_nfdhcpd > /dev/null 2>&1
+  ;;
+  $MAC_FILTERED_TAG)
+    try setup_ebtables > /dev/null 2>&1
+  ;;
+  $MASQ_TAG)
+    try setup_masq > /dev/null 2>&1
+  ;;
+  esac
+done
+
+exit 0

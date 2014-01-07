@@ -30,7 +30,6 @@ import logging
 import logging.handlers
 import threading
 import traceback
-import subprocess
 
 import daemon
 import daemon.runner
@@ -141,21 +140,6 @@ def get_indev(payload):
     return indev_ifindex
 
 
-def get_binding(proxy, ifindex, mac):
-    try:
-        if proxy.mac_indexed_clients:
-            logging.debug(" - Getting binding for mac %s", mac)
-            b = proxy.clients[mac]
-        else:
-            logging.debug(" - Getting binding for ifindex %s", ifindex)
-            b = proxy.clients[ifindex]
-        return b
-    except KeyError:
-        logging.debug(" - No client found for mac / ifindex %s / %s",
-                      mac, ifindex)
-        return None
-
-
 def parse_binding_file(path):
     """ Read a client configuration from a tap file
 
@@ -237,8 +221,10 @@ class ClientFileHandler(pyinotify.ProcessEvent):
 
 
 class Client(object):
-    def __init__(self, tap=None, indev=None, mac=None, ip=None, hostname=None,
-                 subnet=None, gateway=None, subnet6=None, gateway6=None, eui64=None ):
+    def __init__(self, tap=None, indev=None,
+                 mac=None, ip=None, hostname=None,
+                 subnet=None, gateway=None,
+                 subnet6=None, gateway6=None, eui64=None):
         self.mac = mac
         self.ip = ip
         self.hostname = hostname
@@ -420,6 +406,19 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response, 10)
             self.ipv6_enabled = True
 
+    def get_binding(self, ifindex, mac):
+        try:
+            if self.mac_indexed_clients:
+                logging.debug(" - Getting binding for mac %s", mac)
+                b = self.clients[mac]
+            else:
+                logging.debug(" - Getting binding for ifindex %s", ifindex)
+                b = self.clients[ifindex]
+            return b
+        except KeyError:
+            logging.debug(" - No client found for mac / ifindex %s / %s",
+                          mac, ifindex)
+            return None
 
     def _cleanup(self):
         """ Free all resources for a graceful exit
@@ -428,7 +427,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info("Cleaning up")
 
         logging.debug(" - Closing netfilter queues")
-        for q, num in self.nfq.values():
+        for q, _ in self.nfq.values():
             q.close()
 
         logging.debug(" - Stopping inotify watches")
@@ -447,15 +446,6 @@ class VMNetProxy(object):  # pylint: disable=R0902
         q.set_mode(nfqueue.NFQNL_COPY_PACKET)
         self.nfq[q.get_fd()] = (q, pending)
         logging.debug(" - Successfully set up NFQUEUE %d", queue_num)
-
-    def sendp(self, data, binding):
-        """ Send a raw packet using a layer-2 socket
-
-        """
-        logging.info(" - Sending raw packet on %s (%s)",
-                     binding.tap, binding.hostname)
-        binding.sendp(data)
-
 
     def build_config(self):
         self.clients.clear()
@@ -569,11 +559,19 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.debug("Client on %s disappeared!!!", tap)
 
 
-    def dhcp_response(self, dummy, payload):  # pylint: disable=W0613,R0914
+    def dhcp_response(self, arg1, arg2=None):  # pylint: disable=W0613,R0914
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
         """
         logging.info(" * Processing pending DHCP request")
+        # Workaround for supporting both squeezy's nfqueue-bindings-python
+        # and wheezy's python-nfqueue because for some reason the function's
+        # signature has changed and has broken compatibility
+        # See bug http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=718894
+        if arg2:
+            payload = arg2
+        else:
+            payload = arg1
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
         #logging.debug(pkt.show())
@@ -590,7 +588,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         indev = get_indev(payload)
 
-        binding = get_binding(self, indev, mac)
+        binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
             # and return
@@ -604,11 +602,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn(" - Recieved spoofed DHCP request for mac %s from tap %s", mac, indev)
+            logging.warn(" - Recieved spoofed DHCP request: mac %s, indev %s",
+                         mac, indev)
             return
 
-        logging.info(" - Generating DHCP response for host %s (mac %s) on tap %s",
-                       binding.hostname, mac, binding.tap)
+        logging.info(" - Generating DHCP response:"
+                     " host %s, mac %s, tap %s, indev %s",
+                       binding.hostname, mac, binding.tap, indev)
 
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
@@ -668,7 +668,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         elif req_type == DHCPRELEASE:
             # Log and ignore
-            logging.info(" - DHCPRELEASE from %s on %s", binding.mac, binding.tap)
+            logging.info(" - DHCPRELEASE from %s on %s",
+                         binding.hostname, binding.tap)
             return
 
         # Finally, always add the server identifier and end options
@@ -682,7 +683,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - %s to %s (%s) on %s", DHCP_TYPES[resp_type], mac,
                      binding.ip, binding.tap)
         try:
-            self.sendp(resp, binding)
+            binding.sendp(resp)
         except socket.error, e:
             logging.warn(" - DHCP response on %s (%s) failed: %s",
                          binding.tap, binding.hostname, str(e))
@@ -690,11 +691,19 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - Unkown error during DHCP response on %s (%s): %s",
                          binding.tap, binding.hostname, str(e))
 
-    def rs_response(self, dummy, payload):  # pylint: disable=W0613
+    def rs_response(self, arg1, arg2=None):  # pylint: disable=W0613
         """ Generate a reply to a BOOTP/DHCP request
 
         """
         logging.info(" * Processing pending RS request")
+        # Workaround for supporting both squeezy's nfqueue-bindings-python
+        # and wheezy's python-nfqueue because for some reason the function's
+        # signature has changed and has broken compatibility
+        # See bug http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=718894
+        if arg2:
+            payload = arg2
+        else:
+            payload = arg1
         pkt = IPv6(payload.get_data())
         #logging.debug(pkt.show())
         try:
@@ -705,7 +714,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         indev = get_indev(payload)
 
-        binding = get_binding(self, indev, mac)
+        binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
             # and return
@@ -719,7 +728,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac:
-            logging.warn(" - Received spoofed RS request for mac %s from tap %s",
+            logging.warn(" - Received spoofed RS request: mac %s, tap %s",
                          mac, binding.tap)
             return
 
@@ -747,7 +756,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                                      lifetime=self.ra_period * 3)
 
         try:
-            self.sendp(resp, binding)
+            binding.sendp(resp)
         except socket.error, e:
             logging.warn(" - RA on %s (%s) failed: %s",
                          binding.tap, binding.hostname, str(e))
@@ -755,12 +764,20 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - Unkown error during RA on %s (%s): %s",
                          binding.tap, binding.hostname, str(e))
 
-    def ns_response(self, dummy, payload):  # pylint: disable=W0613
+    def ns_response(self, arg1, arg2=None):  # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbor solicitation
 
         """
 
         logging.info(" * Processing pending NS request")
+        # Workaround for supporting both squeezy's nfqueue-bindings-python
+        # and wheezy's python-nfqueue because for some reason the function's
+        # signature has changed and has broken compatibility
+        # See bug http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=718894
+        if arg2:
+            payload = arg2
+        else:
+            payload = arg1
 
         ns = IPv6(payload.get_data())
         #logging.debug(ns.show())
@@ -773,7 +790,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         indev = get_indev(payload)
 
-        binding = get_binding(self, indev, mac)
+        binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
             # and return
@@ -815,10 +832,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
                ICMPv6NDOptDstLLAddr(lladdr=indevmac)
 
         try:
-            self.sendp(resp, binding)
+            binding.sendp(resp)
         except socket.error, e:
             logging.warn(" - NA on %s (%s) failed: %s",
-                         bindig.tap, binding.hostname, str(e))
+                         binding.tap, binding.hostname, str(e))
         except Exception, e:
             logging.warn(" - Unkown error during periodic NA to %s (%s): %s",
                          binding.tap, binding.hostname, str(e))
@@ -853,7 +870,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                          lifetime=self.ra_period * 3)
             try:
-                self.sendp(resp, binding)
+                binding.sendp(resp)
             except socket.error, e:
                 logging.warn(" - Periodic RA on %s (%s) failed: %s",
                              tap, binding.hostname, str(e))
@@ -891,7 +908,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         while True:
             try:
-                rlist, _, xlist = select.select(self.nfq.keys() + [iwfd], [], [], timeout)
+                rlist, _, xlist = select.select(self.nfq.keys() + [iwfd],
+                                                [], [], timeout)
             except select.error, e:
                 if e[0] == errno.EINTR:
                     logging.debug("select() got interrupted")
@@ -933,9 +951,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     timeout = self.ra_period - (time.time() - start)
 
     def print_clients(self):
-        logging.info("%10s   %20s %20s %10s %20s",'Key', 'Client', 'MAC', 'TAP', 'IP')
+        logging.info("%10s   %20s %20s %10s %20s",
+                     'Key', 'Client', 'MAC', 'TAP', 'IP')
         for k, cl in self.clients.items():
-            logging.info("%10s | %20s %20s %10s %20s", k, cl.hostname, cl.mac, cl.tap, cl.ip)
+            logging.info("%10s | %20s %20s %10s %20s",
+                         k, cl.hostname, cl.mac, cl.tap, cl.ip)
 
 
 
@@ -1025,7 +1045,8 @@ if __name__ == "__main__":
                        capng.CAP_SETPCAP)
     # change uid
     capng.capng_change_id(uid.pw_uid, uid.pw_gid,
-                          capng.CAPNG_DROP_SUPP_GRP | capng.CAPNG_CLEAR_BOUNDING)
+                          capng.CAPNG_DROP_SUPP_GRP | \
+                          capng.CAPNG_CLEAR_BOUNDING)
 
     logger = logging.getLogger()
     if opts.debug:
@@ -1099,12 +1120,12 @@ if __name__ == "__main__":
     logging.info("Ready to serve requests")
 
 
-    def handler(signum, frame):
-        logging.debug('Received SIGUSR1. Printing current proxy state...')
+    def debug_handler(signum, _):
+        logging.debug('Received signal %d. Printing proxy state...', signum)
         proxy.print_clients()
 
     # Set the signal handler for debuging clients
-    signal.signal(signal.SIGUSR1, handler)
+    signal.signal(signal.SIGUSR1, debug_handler)
     signal.siginterrupt(signal.SIGUSR1, False)
 
     try:
