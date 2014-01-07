@@ -10,7 +10,6 @@ function try {
 
 }
 
-
 function clear_routed_setup_ipv4 {
 
  arptables -D OUTPUT -o $INTERFACE --opcode request -j mangle
@@ -62,6 +61,11 @@ function routed_setup_ipv4 {
         NETWORK_SUBNET=$(ip route list table $LINK dev $DEV| head -n1 | sed -n 's/^\(.*\)  scope.*$/\1/p')
     fi
 
+    if [ -z "$INTERFACE" -o -z "$NETWORK_GATEWAY" -o -z "$IP" -o -z "$TABLE" ]
+    then
+      return
+    fi
+
     # mangle ARPs to come from the gw's IP
     arptables -A OUTPUT -o $INTERFACE --opcode request -j mangle --mangle-ip-s "$NETWORK_GATEWAY"
 
@@ -88,6 +92,10 @@ function routed_setup_ipv6 {
     uplink=$(ip -6 route list table $TABLE | grep "default via" | awk '{print $5}')
     eui64=$($MAC2EUI64 $MAC $prefix)
 
+    if [ -z "$eui64" -o -z "$TABLE" -o -z "$INTERFACE" -o -z "$uplink" ]
+    then
+      return
+    fi
 
     ip -6 rule add dev $INTERFACE table $TABLE
     ip -6 ro replace $eui64/128 dev $INTERFACE table $TABLE
