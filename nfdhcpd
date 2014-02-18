@@ -683,11 +683,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
             if b.is_valid():
                 if self.mac_indexed_clients:
                     self.clients[b.mac] = b
+                    k = b.mac
                 else:
                     self.clients[ifindex] = b
-                logging.debug(" - Added client:")
-                logging.debug(" + %5s: %10s %20s %7s %15s",
-                               ifindex, b.hostname, b.mac, b.tap, b.ip)
+                    k = ifindex
+                logging.info(" - Added client:")
+                logging.info(" + %10s | %20s %20s %10s %20s %40s",
+                             k, b.hostname, b.mac, b.tap, b.ip, b.eui64)
 
     def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
@@ -698,8 +700,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 if cl.tap == tap:
                     logging.info("Removing client %s and closing socket on %s",
                                  cl.hostname, cl.tap)
-                    logging.debug(" - %10s | %10s %20s %10s %20s",
-                                  k, cl.hostname, cl.mac, cl.tap, cl.ip)
+                    logging.info(" - %10s | %20s %20s %10s %20s %40s",
+                                 k, cl.hostname, cl.mac, cl.tap, cl.ip, cl.eui64)
                     cl.socket.close()
                     del self.clients[k]
         except:
@@ -1112,11 +1114,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     timeout = self.ra_period - (time.time() - start)
 
     def print_clients(self):
-        logging.info("%10s   %20s %20s %10s %20s",
-                     'Key', 'Client', 'MAC', 'TAP', 'IP')
+        logging.info("%10s   %20s %20s %10s %20s %40s",
+                     'Key', 'Client', 'MAC', 'TAP', 'IP', 'IPv6')
         for k, cl in self.clients.items():
-            logging.info("%10s | %20s %20s %10s %20s",
-                         k, cl.hostname, cl.mac, cl.tap, cl.ip)
+            logging.info("%10s | %20s %20s %10s %20s %40s",
+                         k, cl.hostname, cl.mac, cl.tap, cl.ip, cl.eui64)
 
 
 
