@@ -503,6 +503,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         subnet = binding.net6
 
+        if subnet.net is None:
+            logging.debug(" - No IPv6 network assigned for tap %s", binding.tap)
+            return
+
         indevmac = self.get_iface_hw_addr(binding.indev)
         ifll = subnet.make_ll64(indevmac)
         if ifll is None:
