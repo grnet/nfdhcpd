@@ -1024,7 +1024,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             if ifll is None:
                 continue
             resp = Ether(src=indevmac)/\
-                   IPv6(src=str(ifll))/ICMPv6ND_RA(routerlifetime=14400)/\
+                   IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
                    ICMPv6NDOptPrefixInfo(prefix=str(subnet.prefix),
                                          prefixlen=subnet.prefixlen)
             if self.ipv6_nameservers:
