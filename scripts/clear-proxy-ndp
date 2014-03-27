@@ -31,7 +31,7 @@ if [ "$GANETI_INSTANCE_PRIMARY" == "$FULLHOST" ]; then
     ;;  
     esac
   done
-elif [ "$GANETI_INSTANCE_SECONDARIES" == "$FULLHOST" ]; then
+elif [ "$GANETI_NEW_PRIMARY" == "$FULLHOST" ]; then
   for tag in $TAGS; do
     case $tag in
     $IP_LESS_ROUTED_TAG)
