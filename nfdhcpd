@@ -1208,7 +1208,11 @@ if __name__ == "__main__":
 
     if opts.daemonize:
         logfile = os.path.join(config["general"]["logdir"], LOG_FILENAME)
-        handler = logging.handlers.WatchedFileHandler(logfile)
+        try:
+            handler = logging.handlers.WatchedFileHandler(logfile)
+        except IOError:
+            sys.stderr.write(" - Failed to open logging directory, exiting.\n")
+            sys.exit(1)
     else:
         handler = logging.StreamHandler()
 
