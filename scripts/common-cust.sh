@@ -73,7 +73,9 @@ function setup_firewall_ganetimgr {
         cat >>"$GANETI_FERM/$INTERFACE" <<EOF
     domain (ip ip6) chain FORWARD { $FERM_MODE $INTERFACE jump "$subchain"; }
 EOF
-        if [ -z "$SERVICE_MAIL" ]; then
+        # SERVICE_MAIL is only for routed networks, don't filter port 25 on
+        # bridged networks
+        if [ -z "$SERVICE_MAIL" -a "$MODE" = "routed"]; then
             cat >>"$GANETI_FERM/$INTERFACE" <<EOF
     domain (ip ip6) chain "$subchain" $FERM_MODE $INTERFACE {
         proto tcp dport 25 REJECT;
