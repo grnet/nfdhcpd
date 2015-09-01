@@ -42,6 +42,7 @@ elif [ "$MODE" = "bridged" ]; then
     # ViMa bridged networks should not drop DHCP requests
     # DROPDHCPREQCMD="ebtables -A $FROM -p ipv4 --ip-protocol udp --ip-destination-port 67 -j DROP"
     DROPDHCPREQCMD=""
+    NETWORK_TAGS='bridged'
 fi
 
 if [ "x$NETWORK_TAGS" == "x" ]; then
@@ -60,8 +61,8 @@ for tag in $NETWORK_TAGS; do
     $DROPDHCPREQCMD > /dev/null 2>&1
     try setup_nfdhcpd > /dev/null 2>&1
   ;;
-  $MAC_FILTERED_TAG)
-    try setup_ebtables > /dev/null 2>&1
+  $BRIDGED_TAG)
+    try setup_firewall_ganetimgr > /dev/null 2>&1
   ;;
   $MASQ_TAG)
     try setup_masq > /dev/null 2>&1
