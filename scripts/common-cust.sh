@@ -24,9 +24,6 @@ function setup_firewall_ganetimgr {
     #    IS_PUBLIC=1
     #fi
 
-    if [[ "$LINK" = public* ]]; then
-        IS_PUBLIC=1
-    fi
     VIMA_FIREWALL=1
     for tag in $TAGS; do
         if [[ "$tag" = vima:application:* ]]; then

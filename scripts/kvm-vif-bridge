@@ -5,11 +5,6 @@
 # $LINK is the link name from the ganeti-network output
 # $IP is the ip address of the VM
 
-#TAP_CONSTANT_MAC=cc:47:52:4e:45:54 # GRNET in hex :-)
-#MAC2EUI64=/usr/bin/mac2eui64
-#NFDHCPD_STATE_DIR=/var/lib/nfdhcpd
-#GANETI_FERM=/var/run/ganeti-ferm
-
 source /etc/default/nfdhcpd
 source /usr/lib/nfdhcpd/common.sh
 
