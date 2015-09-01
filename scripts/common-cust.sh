@@ -3,10 +3,16 @@
 # unconditionally reverse previously applied rules (if existent)
 function flush_firewall_ganetimgr {
     subchain=vima_$INTERFACE
+    # Use different iptables rules depending on bridged/routed mode
+    if [ "$MODE" = "routed" ]; then
+        IPTABLES_MODE='-i '
+    elif [ "$MODE" = "bridged" ]; then
+        IPTABLES_MODE='-m physdev --physdev-in '
+    fi  
 
     # flush out old rules
     for domain in ip ip6; do
-        /sbin/${domain}tables -D FORWARD -i $INTERFACE -j $subchain 2>/dev/null
+        /sbin/${domain}tables -D FORWARD $IPTABLES_MODE $INTERFACE -j $subchain 2>/dev/null
         /sbin/${domain}tables -F $subchain 2>/dev/null
         /sbin/${domain}tables -X $subchain 2>/dev/null
     done
