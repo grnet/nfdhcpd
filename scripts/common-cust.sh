@@ -6,7 +6,8 @@ function flush_firewall_ganetimgr {
 
     # flush out old rules
     for domain in ip ip6; do
-        # Try-delete rules for both routed and bridged ifaces
+        # Match rules for both routed and bridged ifaces
+        # It's easier than trying to guess what the interface previously was
         /sbin/${domain}tables -D FORWARD -m physdev --physdev-in $INTERFACE -j $subchain 2>/dev/null
         /sbin/${domain}tables -D FORWARD -i $INTERFACE -j $subchain 2>/dev/null
         /sbin/${domain}tables -F $subchain 2>/dev/null
