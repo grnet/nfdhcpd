@@ -54,6 +54,7 @@ for tag in $NETWORK_TAGS; do
   $NFDHCPD_TAG)
     # Drop unicast BOOTP/DHCP packets
     $DROPDHCPREQCMD > /dev/null 2>&1
+    try permit_nfdhcpd_mac_spoofing > /dev/null 2>&1
     try setup_nfdhcpd > /dev/null 2>&1
   ;;
   $BRIDGED_TAG)

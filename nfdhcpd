@@ -161,6 +161,7 @@ def parse_binding_file(path):
     subnet6 = None
     gateway6 = None
     eui64 = None
+    macspoof = None
 
     def get_value(line):
         v = line.strip().split('=')[1]
@@ -187,11 +188,14 @@ def parse_binding_file(path):
             gateway6 = get_value(line)
         elif line.startswith("EUI64="):
             eui64 = get_value(line)
+        elif line.startswith("MACSPOOF="):
+            macspoof = get_value(line)
 
     try:
         return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
                       indev=indev, subnet=subnet, gateway=gateway,
-                      subnet6=subnet6, gateway6=gateway6, eui64=eui64 )
+                      subnet6=subnet6, gateway6=gateway6, eui64=eui64,
+                      macspoof=macspoof)
     except ValueError:
         logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
                         hostname, ip, tap)
@@ -224,7 +228,8 @@ class Client(object):
     def __init__(self, tap=None, indev=None,
                  mac=None, ip=None, hostname=None,
                  subnet=None, gateway=None,
-                 subnet6=None, gateway6=None, eui64=None):
+                 subnet6=None, gateway6=None, eui64=None,
+                 macspoof=None):
         self.mac = mac
         self.ip = ip
         self.hostname = hostname
@@ -238,6 +243,7 @@ class Client(object):
         self.net6 = Subnet(net=subnet6, gw=gateway6, dev=tap)
         self.eui64 = eui64
         self.open_socket()
+        self.macspoof = macspoof
 
     def is_valid(self):
         return self.mac is not None and self.hostname is not None
@@ -600,7 +606,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # Signal the kernel that it shouldn't further process the packet
         payload.set_verdict(nfqueue.NF_DROP)
 
-        if mac != binding.mac:
+        if mac != binding.mac and binding.macspoof is None:
             logging.warn(" - Recieved spoofed DHCP request: mac %s, indev %s",
                          mac, indev)
             return
@@ -730,7 +736,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # Signal the kernel that it shouldn't further process the packet
         payload.set_verdict(nfqueue.NF_DROP)
 
-        if mac != binding.mac:
+        if mac != binding.mac and binding.macspoof is None:
             logging.warn(" - Received spoofed RS request: mac %s, tap %s",
                          mac, binding.tap)
             return
@@ -806,7 +812,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         payload.set_verdict(nfqueue.NF_DROP)
 
-        if mac != binding.mac:
+        if mac != binding.mac and binding.macspoof is None:
             logging.warn(" - Received spoofed NS request"
                          " for mac %s from tap %s", mac, binding.tap)
             return
