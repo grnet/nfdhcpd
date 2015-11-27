@@ -657,13 +657,21 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.info(" - No IP found in binding file.")
             return
 
+        if self.dhcp_server_on_link is True:
+            dhcp_srv_ip = self.get_addr_on_link(indev, mac)
+            if dhcp_srv_ip is None:
+                logging.info(" - Could not get on-link address to use for DHCP response")
+                return
+        else:
+            dhcp_srv_ip = self.dhcp_server_ip
+
         logging.info(" - Generating DHCP response:"
-                     " host %s, mac %s, tap %s, indev %s",
-                       binding.hostname, mac, binding.tap, indev)
+                     " host %s, mac %s, tap %s, indev %s, src %s",
+                       binding.hostname, mac, binding.tap, indev, dhcp_srv_ip)
 
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
-               IP(src=DHCP_DUMMY_SERVER_IP, dst=binding.ip)/\
+               IP(src=dhcp_srv_ip, dst=binding.ip)/\
                UDP(sport=pkt.dport, dport=pkt.sport)/resp
         subnet = binding.net
 
@@ -726,7 +734,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # Finally, always add the server identifier and end options
         dhcp_options += [
             ("message-type", resp_type),
-            ("server_id", DHCP_DUMMY_SERVER_IP),
+            ("server_id", dhcp_srv_ip),
             "end"
         ]
         resp /= DHCP(options=dhcp_options)
