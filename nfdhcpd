@@ -296,6 +296,15 @@ class Subnet(object):
         self.gw = gw
         self.dev = dev
 
+    def __getitem__(self, idx):
+        """ Return the n-th address (network+idx) in the subnet (self.net)
+
+        """
+        if self.net and isinstance(self.net, IPy.IP):
+            return self.net[idx]
+        else:
+            return None
+
     @property
     def netmask(self):
         """ Return the netmask in textual representation
