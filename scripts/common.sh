@@ -168,18 +168,22 @@ function setup_nfdhcpd {
   #IFACE is the interface from which the packet seems to arrive
   #needed in bridged mode where the packets seems to arrive from the
   #bridge and not from the tap
-    cat >$FILE <<EOF
-INDEV=$INDEV
+    local FILECONTENTS="INDEV=$INDEV
 IP=$IP
 MAC=$MAC
 HOSTNAME=$INSTANCE
-TAGS="$TAGS"
+TAGS=\"$TAGS\"
 GATEWAY=$NETWORK_GATEWAY
 SUBNET=$NETWORK_SUBNET
 GATEWAY6=$NETWORK_GATEWAY6
 SUBNET6=$NETWORK_SUBNET6
-EUI64=$($MAC2EUI64 $MAC $NETWORK_SUBNET6 2>/dev/null)
-EOF
+EUI64=$($MAC2EUI64 $MAC $NETWORK_SUBNET6 2>/dev/null)"
 
+    if [ -n "$MACSPOOF" ]; then
+        FILECONTENTS+="
+MACSPOOF=1"
+    fi
+
+    echo "$FILECONTENTS" >$FILE
 }
 

@@ -113,3 +113,15 @@ EOF
         fi  
     fi  
 }
+
+function permit_nfdhcpd_mac_spoofing {
+    local our_tag=vima:nfdhcpd_mac_spoof_ifce
+    for tag in $TAGS; do
+        if [[ "$tag" = "$our_tag":* ]]; then
+            if [ "$INTERFACE_INDEX" == "${tag#${our_tag}:}" ]; then
+                MACSPOOF=1
+                break
+            fi
+        fi
+    done
+}
