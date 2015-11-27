@@ -434,6 +434,37 @@ class VMNetProxy(object):  # pylint: disable=R0902
                           mac, ifindex)
             return None
 
+    def get_addr_on_link(self, ifindex, mac, af=AF_INET):
+        """ For a given client and address family return either the gateway
+        or the first address in the subnet.
+
+        """
+        try:
+            if self.mac_indexed_clients:
+                logging.debug(" - Getting on-link address for mac %s", mac)
+                b = self.clients[mac]
+            else:
+                logging.debug(" - Getting on-link address for ifindex %s", ifindex)
+                b = self.clients[ifindex]
+        except KeyError:
+            logging.debug(" - No client found for mac / ifindex %s / %s",
+                          mac, ifindex)
+            return None
+
+        if af is AF_INET:
+            gw = b.gateway
+            net = b.net
+        elif af is AF_INET6:
+            gw = b.gateway6
+            net = b.net6
+
+        if gw is not None:
+            return gw
+        elif net is not None:
+            return net[1]
+        else:
+            return None
+
     def _cleanup(self):
         """ Free all resources for a graceful exit
 
