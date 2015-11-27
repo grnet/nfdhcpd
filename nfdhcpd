@@ -82,6 +82,7 @@ enable_dhcp = boolean(default=True)
 lease_lifetime = integer(min=0, max=4294967295)
 lease_renewal = integer(min=0, max=4294967295)
 server_ip = ip_addr()
+server_on_link = boolean(default=False)
 dhcp_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=4)
 domain = string(default=None)
@@ -367,7 +368,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                  rs_queue_num=None, ns_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
-                 dhcp_domain='',
+                 dhcp_domain='', dhcp_server_on_link=False,
                  dhcp_server_ip=DHCP_DUMMY_SERVER_IP, dhcp_nameservers=None,
                  ra_period=DEFAULT_RA_PERIOD, ipv6_nameservers=None):
 
@@ -381,6 +382,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         self.lease_renewal = dhcp_lease_renewal
         self.dhcp_domain = dhcp_domain
         self.dhcp_server_ip = dhcp_server_ip
+        self.dhcp_server_on_link = dhcp_server_on_link
         self.ra_period = ra_period
         if dhcp_nameservers is None:
             self.dhcp_nameserver = []
@@ -1151,6 +1153,7 @@ if __name__ == "__main__":
             "dhcp_lease_lifetime": config["dhcp"].as_int("lease_lifetime"),
             "dhcp_lease_renewal": config["dhcp"].as_int("lease_renewal"),
             "dhcp_server_ip": config["dhcp"]["server_ip"],
+            "dhcp_server_on_link": config["dhcp"]["server_on_link"],
             "dhcp_nameservers": config["dhcp"]["nameservers"],
             "dhcp_domain": config["dhcp"]["domain"],
         })
