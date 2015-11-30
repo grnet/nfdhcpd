@@ -436,29 +436,18 @@ class VMNetProxy(object):  # pylint: disable=R0902
                           mac, ifindex)
             return None
 
-    def get_addr_on_link(self, ifindex, mac, af=AF_INET):
+    @staticmethod
+    def get_addr_on_link(binding, af=AF_INET):
         """ For a given client and address family return either the gateway
         or the first address in the subnet.
 
         """
-        try:
-            if self.mac_indexed_clients:
-                logging.debug(" - Getting on-link address for mac %s", mac)
-                b = self.clients[mac]
-            else:
-                logging.debug(" - Getting on-link address for ifindex %s", ifindex)
-                b = self.clients[ifindex]
-        except KeyError:
-            logging.debug(" - No client found for mac / ifindex %s / %s",
-                          mac, ifindex)
-            return None
-
         if af is AF_INET:
-            gw = b.gateway
-            net = b.net
+            gw = binding.gateway
+            net = binding.net
         elif af is AF_INET6:
-            gw = b.gateway6
-            net = b.net6
+            gw = binding.gateway6
+            net = binding.net6
 
         if gw is not None:
             return gw
@@ -658,7 +647,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             return
 
         if self.dhcp_server_on_link is True:
-            dhcp_srv_ip = self.get_addr_on_link(indev, mac)
+            dhcp_srv_ip = self.get_addr_on_link(binding)
             if dhcp_srv_ip is None:
                 logging.info(" - Could not get on-link address to use for DHCP response")
                 return
