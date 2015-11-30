@@ -649,7 +649,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if self.dhcp_server_on_link is True:
             dhcp_srv_ip = self.get_addr_on_link(binding)
             if dhcp_srv_ip is None:
-                logging.info(" - Could not get on-link address to use for DHCP response")
+                logging.warn(" - Could not get on-link address to use for DHCP response")
                 return
         else:
             dhcp_srv_ip = self.dhcp_server_ip
