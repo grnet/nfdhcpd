@@ -82,6 +82,7 @@ enable_dhcp = boolean(default=True)
 lease_lifetime = integer(min=0, max=4294967295)
 lease_renewal = integer(min=0, max=4294967295)
 server_ip = ip_addr()
+server_on_link = boolean(default=False)
 dhcp_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=4)
 domain = string(default=None)
@@ -296,6 +297,15 @@ class Subnet(object):
         self.gw = gw
         self.dev = dev
 
+    def __getitem__(self, idx):
+        """ Return the n-th address (network+idx) in the subnet (self.net)
+
+        """
+        if self.net and isinstance(self.net, IPy.IP):
+            return self.net[idx]
+        else:
+            return None
+
     @property
     def netmask(self):
         """ Return the netmask in textual representation
@@ -358,7 +368,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                  rs_queue_num=None, ns_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
-                 dhcp_domain='',
+                 dhcp_domain='', dhcp_server_on_link=False,
                  dhcp_server_ip=DHCP_DUMMY_SERVER_IP, dhcp_nameservers=None,
                  ra_period=DEFAULT_RA_PERIOD, ipv6_nameservers=None):
 
@@ -372,6 +382,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         self.lease_renewal = dhcp_lease_renewal
         self.dhcp_domain = dhcp_domain
         self.dhcp_server_ip = dhcp_server_ip
+        self.dhcp_server_on_link = dhcp_server_on_link
         self.ra_period = ra_period
         if dhcp_nameservers is None:
             self.dhcp_nameserver = []
@@ -423,6 +434,26 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except KeyError:
             logging.debug(" - No client found for mac / ifindex %s / %s",
                           mac, ifindex)
+            return None
+
+    @staticmethod
+    def get_addr_on_link(binding, af=AF_INET):
+        """ For a given client and address family return either the gateway
+        or the first address in the subnet.
+
+        """
+        if af is AF_INET:
+            gw = binding.gateway
+            net = binding.net
+        elif af is AF_INET6:
+            gw = binding.gateway6
+            net = binding.net6
+
+        if gw is not None:
+            return gw
+        elif net is not None:
+            return net[1]
+        else:
             return None
 
     def _cleanup(self):
@@ -615,13 +646,21 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.info(" - No IP found in binding file.")
             return
 
+        if self.dhcp_server_on_link is True:
+            dhcp_srv_ip = self.get_addr_on_link(binding)
+            if dhcp_srv_ip is None:
+                logging.warn(" - Could not get on-link address to use for DHCP response")
+                return
+        else:
+            dhcp_srv_ip = self.dhcp_server_ip
+
         logging.info(" - Generating DHCP response:"
-                     " host %s, mac %s, tap %s, indev %s",
-                       binding.hostname, mac, binding.tap, indev)
+                     " host %s, mac %s, tap %s, indev %s, src %s",
+                       binding.hostname, mac, binding.tap, indev, dhcp_srv_ip)
 
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
-               IP(src=DHCP_DUMMY_SERVER_IP, dst=binding.ip)/\
+               IP(src=dhcp_srv_ip, dst=binding.ip)/\
                UDP(sport=pkt.dport, dport=pkt.sport)/resp
         subnet = binding.net
 
@@ -684,7 +723,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # Finally, always add the server identifier and end options
         dhcp_options += [
             ("message-type", resp_type),
-            ("server_id", DHCP_DUMMY_SERVER_IP),
+            ("server_id", dhcp_srv_ip),
             "end"
         ]
         resp /= DHCP(options=dhcp_options)
@@ -1111,6 +1150,7 @@ if __name__ == "__main__":
             "dhcp_lease_lifetime": config["dhcp"].as_int("lease_lifetime"),
             "dhcp_lease_renewal": config["dhcp"].as_int("lease_renewal"),
             "dhcp_server_ip": config["dhcp"]["server_ip"],
+            "dhcp_server_on_link": config["dhcp"]["server_on_link"],
             "dhcp_nameservers": config["dhcp"]["nameservers"],
             "dhcp_domain": config["dhcp"]["domain"],
         })
