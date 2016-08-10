@@ -122,6 +122,26 @@ DHCP_REQRESP = {
     DHCPINFORM: DHCPACK,
     }
 
+def ipv62mac(ipv6):
+    # remove subnet info if given
+    subnetIndex = ipv6.find("/")
+    if subnetIndex != -1:
+        ipv6 = ipv6[:subnetIndex]
+
+    ipv6Parts = ipv6.split(":")
+    macParts = []
+    for ipv6Part in ipv6Parts[-4:]:
+        while len(ipv6Part) < 4:
+            ipv6Part = "0" + ipv6Part
+        macParts.append(ipv6Part[:2])
+        macParts.append(ipv6Part[-2:])
+
+    # modify parts to match MAC value
+    macParts[0] = "%02x" % (int(macParts[0], 16) ^ 2)
+    del macParts[4]
+    del macParts[3]
+
+    return ":".join(macParts)
 
 def get_indev(payload):
     try:
@@ -755,9 +775,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
         pkt = IPv6(payload.get_data())
         #logging.debug(pkt.show())
         try:
-            mac = pkt.lladdr
+            mac = ipv62mac(pkt.src)
+            logging.debug(" - MAC: %s", mac)
         except:
-            logging.debug(" - Cannot obtain lladdr in rs")
+            logging.error(" - Cannot obtain MAC in RS")
             return
 
         indev = get_indev(payload)
