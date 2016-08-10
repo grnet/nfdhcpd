@@ -152,7 +152,7 @@ def get_indev(payload):
             return indev_ifindex
     except AttributeError:
         #TODO: return error value
-        logging.debug("No get_physindev() supported")
+        logging.error("No get_physindev() supported")
         return 0
 
     indev_ifindex = payload.get_indev()
@@ -452,7 +452,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 b = self.clients[ifindex]
             return b
         except KeyError:
-            logging.debug(" - No client found for mac / ifindex %s / %s",
+            logging.error(" - No client found for mac / ifindex %s / %s",
                           mac, ifindex)
             return None
 
@@ -526,7 +526,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         try:
             f = open(path, 'r')
         except EnvironmentError:
-            logging.debug(" - %s is probably down, removing", iface)
+            logging.error(" - %s is probably down, removing", iface)
             self.remove_tap(iface)
 
             return ifindex
@@ -560,7 +560,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         try:
             f = open(path, 'r')
         except EnvironmentError:
-            logging.debug(" - %s is probably down, removing", iface)
+            logging.error(" - %s is probably down, removing", iface)
             self.remove_tap(iface)
             return addr
 
@@ -612,7 +612,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     cl.socket.close()
                     del self.clients[k]
         except:
-            logging.debug("Client on %s disappeared!!!", tap)
+            logging.error("Client on %s disappeared!!!", tap)
 
 
     def dhcp_response(self, arg1, arg2=None):  # pylint: disable=W0613,R0914
@@ -853,7 +853,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         try:
             mac = ns.lladdr
         except:
-            logging.debug(" - Cannot obtain lladdr from ns")
+            logging.error(" - Cannot obtain lladdr from ns")
             return
 
 
