@@ -834,7 +834,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                          binding.tap, binding.hostname, str(e))
 
     def ns_response(self, arg1, arg2=None):  # pylint: disable=W0613
-        """ Generate a reply to an ICMPv6 neighbor solicitation
+        """ Generate a reply to an ICMPv6 neighbour solicitation
 
         """
 
@@ -852,8 +852,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #logging.debug(ns.show())
         try:
             mac = ns.lladdr
+            logging.debug(" - MAC: %s", mac)
         except:
-            logging.error(" - Cannot obtain lladdr from ns")
+            logging.debug(" - LLaddr not contained in NS. Ignoring.")
             return
 
 
