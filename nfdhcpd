@@ -55,7 +55,7 @@ from scapy.layers.inet6 import IPv6, ICMPv6ND_RA, ICMPv6ND_NA, \
 from scapy.layers.dhcp import BOOTP, DHCP
 from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
                                DHCP6OptServerId, DHCP6OptClientId, \
-                               DUID_LLT, DHCP6_InfoRequest
+                               DUID_LLT, DHCP6_InfoRequest, DHCP6OptDNSDomains
 
 
 
@@ -98,6 +98,7 @@ rs_queue = integer(min=0, max=65535)
 ns_queue = integer(min=0, max=65535)
 dhcp_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=6)
+domains = force_list(default=None)
 """
 
 
@@ -393,9 +394,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
                  rs_queue_num=None, ns_queue_num=None, dhcpv6_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
-                 dhcp_domain='', dhcp_server_on_link=False,
+                 dhcp_domain=None, dhcp_server_on_link=False,
                  dhcp_server_ip=DHCP_DUMMY_SERVER_IP, dhcp_nameservers=None,
-                 ra_period=DEFAULT_RA_PERIOD, ipv6_nameservers=None):
+                 ra_period=DEFAULT_RA_PERIOD, ipv6_nameservers=None,
+                 dhcpv6_domains=None):
 
         try:
             getattr(nfqueue.payload, 'get_physindev')
@@ -418,6 +420,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self.ipv6_nameservers = []
         else:
             self.ipv6_nameservers = ipv6_nameservers
+
+        if dhcpv6_domains is None:
+            self.dhcpv6_domains = []
+        else:
+            self.dhcpv6_domains = dhcpv6_domains
 
         self.ipv6_enabled = False
 
@@ -508,14 +515,23 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - Generating DHCPv6 response for host %s (mac %s) on tap %s",
                       binding.hostname, binding.mac, binding.tap)
 
+        if self.dhcpv6_domains:
+            domains = self.dhcpv6_domains
+        else:
+            domains = [binding.hostname.split('.', 1)[-1]]
+
+        # We do this in order not to caclulate optlen ourselves
+        dnsdomains = str(DHCP6OptDNSDomains(dnsdomains=domains))
+        dnsservers = str(DHCP6OptDNSServers(dnsservers=self.ipv6_nameservers))
+
         resp = Ether(src=indevmac, dst=binding.mac)/\
                IPv6(tc=192, src=str(ifll), dst=str(ofll))/\
                UDP(sport=pkt.dport, dport=pkt.sport)/\
                DHCP6_Reply(trid=pkt[DHCP6_InfoRequest].trid)/\
                DHCP6OptClientId(duid=pkt[DHCP6OptClientId].duid)/\
                DHCP6OptServerId(duid=DUID_LLT(lladdr=indevmac, timeval=time.time()))/\
-               DHCP6OptDNSServers(dnsservers=self.ipv6_nameservers,
-                                  optlen=16 * len(self.ipv6_nameservers))
+               DHCP6OptDNSDomains(dnsdomains)/\
+               DHCP6OptDNSServers(dnsservers)
 
         try:
             binding.sendp(resp)
@@ -1255,6 +1271,7 @@ if __name__ == "__main__":
             "ns_queue_num": config["ipv6"].as_int("ns_queue"),
             "ra_period": config["ipv6"].as_int("ra_period"),
             "ipv6_nameservers": config["ipv6"]["nameservers"],
+            "dhcpv6_domains": config["ipv6"]["domains"],
         })
 
     # pylint: disable=W0142
