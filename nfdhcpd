@@ -309,6 +309,15 @@ class Client(object):
             logging.warn(" - Truncated msg: %d/%d bytes sent",
                          count, ldata)
 
+    def __repr__(self):
+        ret =  "hostname %s, tap %s, mac %s" % \
+               (self.hostname, self.tap, self.mac)
+        if self.ip:
+            ret += ", ip %s" % self.ip
+        if self.eui64:
+            ret += ", eui64 %s" % self.eui64
+        return ret
+
 
 class Subnet(object):
     def __init__(self, net=None, gw=None, dev=None):
@@ -466,6 +475,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             else:
                 logging.debug(" - Getting binding for ifindex %s", ifindex)
                 b = self.clients[ifindex]
+            logging.info(" - Client found. %s", b)
             return b
         except KeyError:
             logging.error(" - No client found for mac / ifindex %s / %s",
@@ -474,7 +484,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
     def dhcpv6_response(self, arg1, arg2=None):  # pylint: disable=W0613
 
-        logging.info(" * Processing pending DHCPv6 request")
+        logging.info(" * DHCPv6: Processing pending request")
         # Workaround for supporting both squeezy's nfqueue-bindings-python
         # and wheezy's python-nfqueue because for some reason the function's
         # signature has changed and has broken compatibility
@@ -491,10 +501,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
-            # and return
-            logging.debug(" - Ignoring dhcpv6 request for mac %s", mac)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
+            # and return and let the kernel handle it
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
@@ -504,7 +511,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         subnet = binding.net6
 
         if subnet.net is None:
-            logging.debug(" - No IPv6 network assigned for tap %s", binding.tap)
+            logging.debug(" - DHCPv6: No IPv6 network assigned to %s", binding)
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
@@ -537,14 +544,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
                DHCP6OptDNSDomains(dnsdomains)/\
                DHCP6OptDNSServers(dnsservers)
 
+        logging.info(" - DHCPv6: Response for %s", binding)
         try:
             binding.sendp(resp)
         except socket.error, e:
-            logging.warn(" - DHCPv6 on %s (%s) failed: %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - DHCPv6: Response on %s failed: %s",
+                         binding, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during DHCPv6 on %s (%s): %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - DHCPv6: Unkown error during response on %s: %s",
+                         binding, str(e))
 
 
     @staticmethod
@@ -687,9 +695,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 else:
                     self.clients[ifindex] = b
                     k = ifindex
-                logging.info(" - Added client:")
-                logging.info(" + %10s | %20s %20s %10s %20s %40s",
-                             k, b.hostname, b.mac, b.tap, b.ip, b.eui64)
+                logging.info(" - Added client %s. %s", k, b)
 
     def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
@@ -698,12 +704,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         try:
             for k, cl in self.clients.items():
                 if cl.tap == tap:
-                    logging.info("Removing client %s and closing socket on %s",
-                                 cl.hostname, cl.tap)
-                    logging.info(" - %10s | %20s %20s %10s %20s %40s",
-                                 k, cl.hostname, cl.mac, cl.tap, cl.ip, cl.eui64)
                     cl.socket.close()
                     del self.clients[k]
+                    logging.info("Removed client %s. %s", k, cl)
         except:
             logging.error("Client on %s disappeared!!!", tap)
 
@@ -712,7 +715,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
         """
-        logging.info(" * Processing pending DHCP request")
+        logging.info(" * DHCP: Processing pending request")
         # Workaround for supporting both squeezy's nfqueue-bindings-python
         # and wheezy's python-nfqueue because for some reason the function's
         # signature has changed and has broken compatibility
@@ -740,10 +743,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
-            # and return
-            logging.debug(" - Ignoring DHCP request on unknown iface %s", indev)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
+            # and return to let the kernel handle it
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
@@ -751,12 +751,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - Recieved spoofed DHCP request: mac %s, indev %s",
-                         mac, indev)
+            logging.warn(" - DHCP: Received spoofed request from %s (and not %s)",
+                         mac, binding)
             return
 
         if not binding.ip:
-            logging.info(" - No IP found in binding file.")
+            logging.info(" - DHCP: No IP found in binding file %s.", binding)
             return
 
         if self.dhcp_server_on_link is True:
@@ -767,20 +767,18 @@ class VMNetProxy(object):  # pylint: disable=R0902
         else:
             dhcp_srv_ip = self.dhcp_server_ip
 
-        logging.info(" - Generating DHCP response:"
+        if not DHCP in pkt:
+            logging.warn(" - DHCP: Invalid request with no DHCP payload found. %s", binding)
+            return
+
+        logging.info(" - DHCP: Generating response:"
                      " host %s, mac %s, tap %s, indev %s, src %s",
                        binding.hostname, mac, binding.tap, indev, dhcp_srv_ip)
-
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
                IP(src=dhcp_srv_ip, dst=binding.ip)/\
                UDP(sport=pkt.dport, dport=pkt.sport)/resp
         subnet = binding.net
-
-        if not DHCP in pkt:
-            logging.warn(" - Invalid request from %s on %s, no DHCP"
-                         " payload found", binding.mac, binding.tap)
-            return
 
         dhcp_options = []
         requested_addr = binding.ip
@@ -790,8 +788,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
             if type(opt) is tuple and opt[0] == "requested_addr":
                 requested_addr = opt[1]
 
-        logging.info(" - %s from %s on %s", DHCP_TYPES.get(req_type, "UNKNOWN"),
-                     binding.mac, binding.tap)
+        logging.info(" - DHCP: %s from %s",
+                     DHCP_TYPES.get(req_type, "UNKNOWN"), binding)
 
         if self.dhcp_domain:
             domainname = self.dhcp_domain
@@ -800,9 +798,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         if req_type == DHCPREQUEST and requested_addr != binding.ip:
             resp_type = DHCPNAK
-            logging.info(" - Sending DHCPNAK to %s on %s: requested %s"
-                         " instead of %s", binding.mac, binding.tap,
-                         requested_addr, binding.ip)
+            logging.info(" - DHCP: Sending DHCPNAK to %s (because requested %s)",
+                         binding, requested_addr)
 
         elif req_type in (DHCPDISCOVER, DHCPREQUEST):
             resp_type = DHCP_REQRESP[req_type]
@@ -829,8 +826,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         elif req_type == DHCPRELEASE:
             # Log and ignore
-            logging.info(" - DHCPRELEASE from %s on %s",
-                         binding.hostname, binding.tap)
+            logging.info(" - DHCP: DHCPRELEASE from %s on %s", binding)
             return
 
         # Finally, always add the server identifier and end options
@@ -841,22 +837,20 @@ class VMNetProxy(object):  # pylint: disable=R0902
         ]
         resp /= DHCP(options=dhcp_options)
 
-        logging.info(" - %s to %s (%s) on %s", DHCP_TYPES[resp_type], mac,
-                     binding.ip, binding.tap)
+        logging.info(" - DHCP: RESPONSE %s for %s", DHCP_TYPES[resp_type], binding)
         try:
             binding.sendp(resp)
         except socket.error, e:
-            logging.warn(" - DHCP response on %s (%s) failed: %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - DHCP: Response on %s failed: %s", binding, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during DHCP response on %s (%s): %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - DHCP: Unkown error during DHCP response on %s: %s",
+                         binding, str(e))
 
     def rs_response(self, arg1, arg2=None):  # pylint: disable=W0613
-        """ Generate a reply to a BOOTP/DHCP request
+        """ Generate a reply to an ICMPv6 router solicitation
 
         """
-        logging.info(" * Processing pending RS request")
+        logging.info(" * RS: Processing pending request")
         # Workaround for supporting both squeezy's nfqueue-bindings-python
         # and wheezy's python-nfqueue because for some reason the function's
         # signature has changed and has broken compatibility
@@ -869,9 +863,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #logging.debug(pkt.show())
         try:
             mac = ipv62mac(pkt.src)
-            logging.debug(" - MAC: %s", mac)
+            logging.debug(" - RS: MAC %s", mac)
         except:
-            logging.error(" - Cannot obtain MAC in RS")
+            logging.error(" - RS: Cannot obtain MAC in RS")
             return
 
         indev = get_indev(payload)
@@ -879,10 +873,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
-            # and return
-            logging.debug(" - Ignoring router solicitation on for mac %s", mac)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
+            # and return and let the kernel handle it
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
@@ -890,14 +881,14 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - Received spoofed RS request: mac %s, tap %s",
-                         mac, binding.tap)
+            logging.warn(" - RS: Received spoofed request from %s (and not %s)",
+                         mac, binding)
             return
 
         subnet = binding.net6
 
         if subnet.net is None:
-            logging.debug(" - No IPv6 network assigned for tap %s", binding.tap)
+            logging.debug(" - RS: No IPv6 network assigned to %s", binding)
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
@@ -905,7 +896,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if ifll is None:
             return
 
-        logging.info(" - Generating RA for host %s (mac %s) on tap %s",
+        logging.info(" - RS: Generating for host %s (mac %s) on tap %s",
                       binding.hostname, mac, binding.tap)
 
         resp = Ether(src=indevmac)/\
@@ -917,21 +908,23 @@ class VMNetProxy(object):  # pylint: disable=R0902
             resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                      lifetime=self.ra_period * 3)
 
+        logging.info(" - RS: Sending RA for %s", binding)
+
         try:
             binding.sendp(resp)
         except socket.error, e:
-            logging.warn(" - RA on %s (%s) failed: %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - RS: RA failed on %s: %s",
+                         binding, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during RA on %s (%s): %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - RS: Unkown error during RA on %s: %s",
+                         binding, str(e))
 
     def ns_response(self, arg1, arg2=None):  # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 neighbour solicitation
 
         """
 
-        logging.info(" * Processing pending NS request")
+        logging.info(" * NS: Processing pending request")
         # Workaround for supporting both squeezy's nfqueue-bindings-python
         # and wheezy's python-nfqueue because for some reason the function's
         # signature has changed and has broken compatibility
@@ -956,24 +949,19 @@ class VMNetProxy(object):  # pylint: disable=R0902
         binding = self.get_binding(indev, mac)
         if binding is None:
             # We don't know anything about this interface, so accept the packet
-            # and return
-            logging.debug(" - Ignoring neighbour solicitation for eui64 %s",
-                          ns.tgt)
-            # We don't know what to do with this packet, so let the kernel
-            # handle it
+            # and return and let the kernel handle it
             payload.set_verdict(nfqueue.NF_ACCEPT)
             return
 
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - Received spoofed NS request"
-                         " for mac %s from tap %s", mac, binding.tap)
+            logging.warn(" - NS: Received spoofed request from %s (and not %s)", mac, binding)
             return
 
         subnet = binding.net6
         if subnet.net is None:
-            logging.debug(" - No IPv6 network assigned for the interface")
+            logging.debug(" - NS: No IPv6 network assigned to %s", binding)
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
@@ -983,10 +971,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
             return
 
         if not (subnet.net.overlaps(ns.tgt) or str(ns.tgt) == str(ifll)):
-            logging.debug(" - Received NS for a non-routable IP (%s)", ns.tgt)
+            logging.debug(" - NS: Received NS for a non-routable IP (%s)", ns.tgt)
             return 1
 
-        logging.info(" - Generating NA for host %s (mac %s) on tap %s",
+        logging.info(" - NS: Generating NA for host %s (mac %s) on tap %s",
                      binding.hostname, mac, binding.tap)
 
         resp = Ether(src=indevmac, dst=binding.mac)/\
@@ -994,14 +982,16 @@ class VMNetProxy(object):  # pylint: disable=R0902
                ICMPv6ND_NA(R=1, O=0, S=1, tgt=ns.tgt)/\
                ICMPv6NDOptDstLLAddr(lladdr=indevmac)
 
+        logging.info(" - NS: Sending NA for %s ", binding)
+
         try:
             binding.sendp(resp)
         except socket.error, e:
-            logging.warn(" - NA on %s (%s) failed: %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - NS: NA on %s failed: %s",
+                         binding, str(e))
         except Exception, e:
-            logging.warn(" - Unkown error during periodic NA to %s (%s): %s",
-                         binding.tap, binding.hostname, str(e))
+            logging.warn(" - NS: Unkown error during NA to %s: %s",
+                         binding, str(e))
 
     def send_periodic_ra(self):
         # Use a separate thread as this may take a _long_ time with
@@ -1009,7 +999,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         threading.Thread(target=self._send_periodic_ra).start()
 
     def _send_periodic_ra(self):
-        logging.info("Sending out periodic RAs")
+        logging.info(" * Periodic RA: Starting...")
         start = time.time()
         i = 0
         for binding in self.clients.values():
@@ -1018,8 +1008,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             # mac = binding.mac
             subnet = binding.net6
             if subnet.net is None:
-                logging.debug(" - Skipping periodic RA on interface %s,"
-                              " as it is not IPv6-connected", tap)
+                logging.debug(" - RA: Skipping %s", binding)
                 continue
             indevmac = self.get_iface_hw_addr(indev)
             ifll = subnet.make_ll64(indevmac)
@@ -1035,13 +1024,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
             try:
                 binding.sendp(resp)
             except socket.error, e:
-                logging.warn(" - Periodic RA on %s (%s) failed: %s",
-                             tap, binding.hostname, str(e))
+                logging.warn(" - RA: Failed on %s: %s",
+                             binding, str(e))
             except Exception, e:
-                logging.warn(" - Unkown error during periodic RA on %s (%s):"
-                             " %s", tap, binding.hostname, str(e))
+                logging.warn(" - RA: Unkown error on %s: %s", binding, str(e))
             i += 1
-        logging.info(" - Sent %d RAs in %.2f seconds", i, time.time() - start)
+        logging.info(" - RA: Sent %d RAs in %.2f seconds", i, time.time() - start)
 
     def serve(self):
         """ Safely perform the main loop, freeing all resources upon exit
@@ -1053,7 +1041,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self._cleanup()
 
     def _serve(self):
-        """ Loop forever, serving DHCP requests
+        """ Loop forever, serving requests
 
         """
         self.build_config()
