@@ -3,6 +3,7 @@ domain ip {
 		chain PREROUTING {
 			interface tap+ proto udp dport 67 NFQUEUE queue-num 42;
 			interface prv+ proto udp dport 67 NFQUEUE queue-num 42;
+			interface br+ proto udp dport 67 NFQUEUE queue-num 42;
 		}
 	}
 }
@@ -12,6 +13,7 @@ domain ip6 {
 		chain PREROUTING {
 			interface tap+ proto icmpv6 icmpv6-type router-solicitation NFQUEUE queue-num 43;
 			interface tap+ proto icmpv6 icmpv6-type neighbour-solicitation NFQUEUE queue-num 44;
+			interface tap+ proto udp dport 547 NFQUEUE queue-num 45;
 		}
 	}
 }

@@ -53,6 +53,10 @@ from scapy.layers.inet6 import IPv6, ICMPv6ND_RA, ICMPv6ND_NA, \
                                ICMPv6NDOptPrefixInfo, \
                                ICMPv6NDOptRDNSS
 from scapy.layers.dhcp import BOOTP, DHCP
+from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
+                               DHCP6OptServerId, DHCP6OptClientId, \
+                               DUID_LLT, DHCP6_InfoRequest
+
 
 
 DEFAULT_CONFIG = "/etc/nfdhcpd/nfdhcpd.conf"
@@ -92,6 +96,7 @@ enable_ipv6 = boolean(default=True)
 ra_period = integer(min=1, max=4294967295)
 rs_queue = integer(min=0, max=65535)
 ns_queue = integer(min=0, max=65535)
+dhcp_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=6)
 """
 
@@ -385,7 +390,7 @@ class Subnet(object):
 
 class VMNetProxy(object):  # pylint: disable=R0902
     def __init__(self, data_path, dhcp_queue_num=None,  # pylint: disable=R0913
-                 rs_queue_num=None, ns_queue_num=None,
+                 rs_queue_num=None, ns_queue_num=None, dhcpv6_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
                  dhcp_domain='', dhcp_server_on_link=False,
@@ -442,6 +447,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response, 10)
             self.ipv6_enabled = True
 
+        if dhcpv6_queue_num is not None:
+            self._setup_nfqueue(dhcpv6_queue_num, AF_INET6, self.dhcpv6_response, 10)
+            self.ipv6_enabled = True
+
     def get_binding(self, ifindex, mac):
         try:
             if self.mac_indexed_clients:
@@ -455,6 +464,68 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.error(" - No client found for mac / ifindex %s / %s",
                           mac, ifindex)
             return None
+
+    def dhcpv6_response(self, arg1, arg2=None):  # pylint: disable=W0613
+
+        logging.info(" * Processing pending DHCPv6 request")
+        # Workaround for supporting both squeezy's nfqueue-bindings-python
+        # and wheezy's python-nfqueue because for some reason the function's
+        # signature has changed and has broken compatibility
+        # See bug http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=718894
+        if arg2:
+            payload = arg2
+        else:
+            payload = arg1
+        pkt = IPv6(payload.get_data())
+        indev = get_indev(payload)
+
+        #TODO: figure out how to find the src mac
+        mac = None
+        binding = self.get_binding(indev, mac)
+        if binding is None:
+            # We don't know anything about this interface, so accept the packet
+            # and return
+            logging.debug(" - Ignoring dhcpv6 request for mac %s", mac)
+            # We don't know what to do with this packet, so let the kernel
+            # handle it
+            payload.set_verdict(nfqueue.NF_ACCEPT)
+            return
+
+        # Signal the kernel that it shouldn't further process the packet
+        payload.set_verdict(nfqueue.NF_DROP)
+
+        subnet = binding.net6
+
+        indevmac = self.get_iface_hw_addr(binding.indev)
+        ifll = subnet.make_ll64(indevmac)
+        if ifll is None:
+            return
+
+        ofll = subnet.make_ll64(binding.mac)
+        if ofll is None:
+            return
+
+        logging.info(" - Generating DHCPv6 response for host %s (mac %s) on tap %s",
+                      binding.hostname, binding.mac, binding.tap)
+
+        resp = Ether(src=indevmac, dst=binding.mac)/\
+               IPv6(tc=192, src=str(ifll), dst=str(ofll))/\
+               UDP(sport=pkt.dport, dport=pkt.sport)/\
+               DHCP6_Reply(trid=pkt[DHCP6_InfoRequest].trid)/\
+               DHCP6OptClientId(duid=pkt[DHCP6OptClientId].duid)/\
+               DHCP6OptServerId(duid=DUID_LLT(lladdr=indevmac, timeval=time.time()))/\
+               DHCP6OptDNSServers(dnsservers=self.ipv6_nameservers,
+                                  optlen=16 * len(self.ipv6_nameservers))
+
+        try:
+            binding.sendp(resp)
+        except socket.error, e:
+            logging.warn(" - DHCPv6 on %s (%s) failed: %s",
+                         binding.tap, binding.hostname, str(e))
+        except Exception, e:
+            logging.warn(" - Unkown error during DHCPv6 on %s (%s): %s",
+                         binding.tap, binding.hostname, str(e))
+
 
     @staticmethod
     def get_addr_on_link(binding, af=AF_INET):
@@ -816,7 +887,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                       binding.hostname, mac, binding.tap)
 
         resp = Ether(src=indevmac)/\
-               IPv6(src=str(ifll))/ICMPv6ND_RA(routerlifetime=14400)/\
+               IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
                ICMPv6NDOptPrefixInfo(prefix=str(subnet.prefix),
                                      prefixlen=subnet.prefixlen)
 
@@ -1179,6 +1250,7 @@ if __name__ == "__main__":
 
     if config["ipv6"].as_bool("enable_ipv6"):
         proxy_opts.update({
+            "dhcpv6_queue_num": config["ipv6"].as_int("dhcp_queue"),
             "rs_queue_num": config["ipv6"].as_int("rs_queue"),
             "ns_queue_num": config["ipv6"].as_int("ns_queue"),
             "ra_period": config["ipv6"].as_int("ra_period"),
