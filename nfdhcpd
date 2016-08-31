@@ -470,15 +470,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
     def get_binding(self, ifindex, mac):
         try:
             if self.mac_indexed_clients:
-                logging.debug(" - Getting binding for mac %s", mac)
+                logging.debug(" - Binding: Getting binding for mac %s", mac)
                 b = self.clients[mac]
             else:
-                logging.debug(" - Getting binding for ifindex %s", ifindex)
+                logging.debug(" - Binding: Getting binding for ifindex %s", ifindex)
                 b = self.clients[ifindex]
-            logging.info(" - Client found. %s", b)
+            logging.debug(" - Binding: Client found. %s", b)
             return b
         except KeyError:
-            logging.error(" - No client found for mac / ifindex %s / %s",
+            logging.error(" - Binding: No client found for mac:%s / ifindex:%s",
                           mac, ifindex)
             return None
 
@@ -751,7 +751,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - DHCP: Received spoofed request from %s (and not %s)",
+            logging.debug(" - DHCP: Received spoofed request from %s (and not %s)",
                          mac, binding)
             return
 
@@ -881,7 +881,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - RS: Received spoofed request from %s (and not %s)",
+            logging.debug(" - RS: Received spoofed request from %s (and not %s)",
                          mac, binding)
             return
 
@@ -956,7 +956,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         payload.set_verdict(nfqueue.NF_DROP)
 
         if mac != binding.mac and binding.macspoof is None:
-            logging.warn(" - NS: Received spoofed request from %s (and not %s)", mac, binding)
+            logging.debug(" - NS: Received spoofed request from %s (and not %s)", mac, binding)
             return
 
         subnet = binding.net6
