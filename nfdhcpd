@@ -153,7 +153,7 @@ def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
         if indev_ifindex:
-            logging.debug(" - Incoming packet from bridge with ifindex %s",
+            logging.debug(" - Incoming packet from device with ifindex %s",
                           indev_ifindex)
             return indev_ifindex
     except AttributeError:
@@ -162,7 +162,7 @@ def get_indev(payload):
         return 0
 
     indev_ifindex = payload.get_indev()
-    logging.debug(" - Incoming packet from tap with ifindex %s", indev_ifindex)
+    logging.debug(" - Incoming packet from device with ifindex %s", indev_ifindex)
 
     return indev_ifindex
 
@@ -523,8 +523,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if ofll is None:
             return
 
-        logging.info(" - Generating DHCPv6 response for host %s (mac %s) on tap %s",
-                      binding.hostname, binding.mac, binding.tap)
+        logging.debug(" - DHCPv6: Generating response for %s", binding)
 
         if self.dhcpv6_domains:
             domains = self.dhcpv6_domains
@@ -771,9 +770,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.warn(" - DHCP: Invalid request with no DHCP payload found. %s", binding)
             return
 
-        logging.info(" - DHCP: Generating response:"
-                     " host %s, mac %s, tap %s, indev %s, src %s",
-                       binding.hostname, mac, binding.tap, indev, dhcp_srv_ip)
+        logging.debug(" - DHCP: Generating response for %s, src %s", binding, dhcp_srv_ip)
 
         resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
                IP(src=dhcp_srv_ip, dst=binding.ip)/\
@@ -896,8 +893,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if ifll is None:
             return
 
-        logging.info(" - RS: Generating for host %s (mac %s) on tap %s",
-                      binding.hostname, mac, binding.tap)
+        logging.debug(" - RS: Generating response for %s", binding)
 
         resp = Ether(src=indevmac)/\
                IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
@@ -974,8 +970,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.debug(" - NS: Received NS for a non-routable IP (%s)", ns.tgt)
             return 1
 
-        logging.info(" - NS: Generating NA for host %s (mac %s) on tap %s",
-                     binding.hostname, mac, binding.tap)
+        logging.debug(" - NS: Generating NA for %s", binding)
 
         resp = Ether(src=indevmac, dst=binding.mac)/\
                IPv6(src=str(ifll), dst=ns.src)/\
