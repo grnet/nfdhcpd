@@ -478,7 +478,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             logging.debug(" - Binding: Client found. %s", b)
             return b
         except KeyError:
-            logging.error(" - Binding: No client found for mac:%s / ifindex:%s",
+            logging.debug(" - Binding: No client found for mac:%s / ifindex:%s",
                           mac, ifindex)
             return None
 
