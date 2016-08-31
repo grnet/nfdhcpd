@@ -834,7 +834,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         ]
         resp /= DHCP(options=dhcp_options)
 
-        logging.info(" - DHCP: RESPONSE %s for %s", DHCP_TYPES[resp_type], binding)
+        logging.info(" - DHCP: %s for %s", DHCP_TYPES[resp_type], binding)
         try:
             binding.sendp(resp)
         except socket.error, e:
