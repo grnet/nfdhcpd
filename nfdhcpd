@@ -293,7 +293,7 @@ class Client(object):
         if isinstance(data, BasePacket):
             data = str(data)
 
-        logging.debug(" - Sending raw packet %r", data)
+        #logging.debug(" - Sending raw packet %r", data)
 
         try:
             count = self.socket.send(data, socket.MSG_DONTWAIT)
