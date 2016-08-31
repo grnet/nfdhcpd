@@ -761,7 +761,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if self.dhcp_server_on_link is True:
             dhcp_srv_ip = self.get_addr_on_link(binding)
             if dhcp_srv_ip is None:
-                logging.warn(" - Could not get on-link address to use for DHCP response")
+                logging.warn(" - DHCP: Could not get on-link address to use for DHCP response")
                 return
         else:
             dhcp_srv_ip = self.dhcp_server_ip
@@ -934,9 +934,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #logging.debug(ns.show())
         try:
             mac = ns.lladdr
-            logging.debug(" - MAC: %s", mac)
+            logging.debug(" - NS: MAC: %s", mac)
         except:
-            logging.debug(" - LLaddr not contained in NS. Ignoring.")
+            logging.debug(" - NS: LLaddr not contained in NS. Ignoring.")
             return
 
 
