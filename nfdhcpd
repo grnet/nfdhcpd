@@ -96,7 +96,7 @@ enable_ipv6 = boolean(default=True)
 ra_period = integer(min=1, max=4294967295)
 rs_queue = integer(min=0, max=65535)
 ns_queue = integer(min=0, max=65535)
-dhcp_queue = integer(min=0, max=65535)
+dhcpv6_queue = integer(min=0, max=65535)
 nameservers = ip_addr_list(family=6)
 domains = force_list(default=None)
 """
@@ -1260,7 +1260,7 @@ if __name__ == "__main__":
 
     if config["ipv6"].as_bool("enable_ipv6"):
         proxy_opts.update({
-            "dhcpv6_queue_num": config["ipv6"].as_int("dhcp_queue"),
+            "dhcpv6_queue_num": config["ipv6"].as_int("dhcpv6_queue"),
             "rs_queue_num": config["ipv6"].as_int("rs_queue"),
             "ns_queue_num": config["ipv6"].as_int("ns_queue"),
             "ra_period": config["ipv6"].as_int("ra_period"),
