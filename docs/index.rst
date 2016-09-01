@@ -63,7 +63,7 @@ pipeline for packets coming from tap0, using iptables:
 
 .. code-block:: console
 
-  # iptables -t mangle -A PREROUTING -i tap0 -m udp -p udp --dport 67 -j NFQUEUE --queue-num 42
+  # iptables -t mangle -A PREROUTING -p udp -m physdev --physdev-in tap+ -m udp --dport 67 -j NFQUEUE --queue-num 42
 
 e) From now on, whenever a DHCP request is sent out by the VM, the
 iptables rule will forward the packet to nfdhcpd, which will consult
@@ -141,9 +141,9 @@ router and thus any RA/NA should be served locally. Specifically:
 
 * ``ns_queue`` the NFQUEUE number to listen on for neighbor solicitations
 
-* ``dhcp_queue`` the NFQUEUE number to listen on for DHCPv6 request
+* ``dhcpv6_queue`` the NFQUEUE number to listen on for DHCPv6 request
 
-* ``nmeservers`` the IPv6 nameservers
+* ``nameservers`` the IPv6 nameservers
 
 | They can be send using the RDNSS option of the RA [4].
 | Since it is not supported by Windows we serve them via DHCPv6 responses
@@ -160,7 +160,7 @@ the corresponding packages. Please note that in case of bridged setup the
 kernel understands that the packets are coming from the bridge (logical indev)
 and not from the tap (physical indev). Specifically:
 
-* **DHCP**: ``iptables -t mangle -A PREROUTING -i tap+ -p udp --dport 67 -j NFQUEUE --queue-num 42``
+* **DHCP**: ``iptables -t mangle -A PREROUTING -p udp -m physdev --physdev-in tap+ -m udp --dport 67 -j NFQUEUE --queue-num 42``
 
 * **RS**: ``ip6tables -t mangle -A PREROUTING -i tap+ -p icmpv6 --icmpv6-type router-solicitation -j NFQUEUE --queue-num 43``
 
