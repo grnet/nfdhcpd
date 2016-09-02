@@ -679,25 +679,29 @@ class VMNetProxy(object):  # pylint: disable=R0902
         """ Add an interface to monitor
 
         """
-        tap = os.path.basename(path)
+        try:
+            tap = os.path.basename(path)
 
-        logging.info("Updating configuration for %s", tap)
-        b = parse_binding_file(path)
-        if b is None:
-            return
-        ifindex = self.get_ifindex(b.tap)
+            logging.info("Updating configuration for %s", tap)
+            binding = parse_binding_file(path)
+            if binding is None:
+                return
+            ifindex = self.get_ifindex(binding.tap)
 
-        if ifindex is None:
-            logging.warn(" - Stale configuration for %s found", tap)
-        else:
-            if b.is_valid():
-                if self.mac_indexed_clients:
-                    self.clients[b.mac] = b
-                    k = b.mac
-                else:
-                    self.clients[ifindex] = b
-                    k = ifindex
-                logging.info(" - Added client %s. %s", k, b)
+            if ifindex is None:
+                logging.warn(" - Stale configuration for %s found", tap)
+            else:
+                if binding.is_valid():
+                    if self.mac_indexed_clients:
+                        self.clients[binding.mac] = binding
+                        client = binding.mac
+                    else:
+                        self.clients[ifindex] = binding
+                        client = ifindex
+                    logging.info(" - Added client %s. %s", client, binding)
+        except Exception, e:
+            logging.warn("Error while adding interface from path %s: %s",
+path, str(e))
 
     def remove_tap(self, tap):
         """ Cleanup clients on a removed interface
