@@ -260,6 +260,15 @@ class ClientFileHandler(pyinotify.ProcessEvent):
         """
         self.server.add_tap(os.path.join(event.path, event.name))
 
+    def process_IN_Q_OVERFLOW(self, event): # pylint: disable=C0103
+        """ Event overflow handler
+
+        Currently this reads all interface configs
+
+        """
+        for path in glob.glob(os.path.join(self.server.data_path, "*")):
+            self.server.add_tap(path)
+
 
 class Client(object):
     def __init__(self, tap=None, indev=None,
@@ -451,6 +460,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         self.wm = pyinotify.WatchManager()
         mask = pyinotify.EventsCodes.ALL_FLAGS["IN_DELETE"]
         mask |= pyinotify.EventsCodes.ALL_FLAGS["IN_CLOSE_WRITE"]
+        mask |= pyinotify.EventsCodes.ALL_FLAGS["IN_Q_OVERFLOW"]
         inotify_handler = ClientFileHandler(self)
         self.notifier = pyinotify.Notifier(self.wm, inotify_handler)
         self.wm.add_watch(self.data_path, mask, rec=True)
