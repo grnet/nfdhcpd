@@ -498,6 +498,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         pkt = IPv6(payload.get_data())
         indev = get_indev(payload)
 
+        #logging.debug(pkt.show())
         #TODO: figure out how to find the src mac
         mac = None
         binding = self.get_binding(indev, mac)
@@ -730,7 +731,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
         #logging.debug(pkt.show())
 
         # Get the client MAC address
-        resp = pkt.getlayer(BOOTP).copy()
+        try:
+            resp = pkt.getlayer(BOOTP).copy()
+        except Exception, e:
+            logging.error(" - DHCP: Packet read failed: %s", str(e))
         hlen = resp.hlen
         mac = resp.chaddr[:hlen].encode("hex")
         mac, _ = re.subn(r'([0-9a-fA-F]{2})', r'\1:', mac, hlen - 1)
