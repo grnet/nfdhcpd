@@ -395,13 +395,6 @@ class Subnet(object):
             prefix += ["".join(eui64[l:l+2])]
         return IPy.IP(":".join(prefix))
 
-    def make_eui64(self, mac):
-        """ Compute an EUI-64 address from an EUI-48 (MAC) address in this
-        subnet.
-
-        """
-        return self._make_eui64(self.net, mac)
-
     def make_ll64(self, mac):
         """ Compute an IPv6 Link-local address from an EUI-48 (MAC) address
 
