@@ -51,11 +51,16 @@ from scapy.layers.inet import IP, UDP
 from scapy.layers.inet6 import IPv6, ICMPv6ND_RA, ICMPv6ND_NA, \
                                ICMPv6NDOptDstLLAddr, \
                                ICMPv6NDOptPrefixInfo, \
-                               ICMPv6NDOptRDNSS
+                               ICMPv6NDOptRDNSS, \
+                               ICMPv6NDOptMTU
 from scapy.layers.dhcp import BOOTP, DHCP
 from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
                                DHCP6OptServerId, DHCP6OptClientId, \
                                DUID_LLT, DHCP6_InfoRequest, DHCP6OptDNSDomains
+import scapy.layers.dhcp as scapy_dhcp
+
+scapy_dhcp.DHCPOptions[26] = ShortField("interface_mtu", 1500)
+scapy_dhcp.DHCPRevOptions["interface_mtu"] = (26, scapy_dhcp.DHCPOptions[26])
 
 
 
@@ -191,6 +196,7 @@ def parse_binding_file(path):
     gateway6 = None
     eui64 = None
     macspoof = None
+    mtu = None
 
     def get_value(line):
         v = line.strip().split('=')[1]
@@ -219,12 +225,14 @@ def parse_binding_file(path):
             eui64 = get_value(line)
         elif line.startswith("MACSPOOF="):
             macspoof = get_value(line)
+        elif line.startswith("MTU="):
+            mtu = get_value(line)
 
     try:
         return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
                       indev=indev, subnet=subnet, gateway=gateway,
                       subnet6=subnet6, gateway6=gateway6, eui64=eui64,
-                      macspoof=macspoof)
+                      macspoof=macspoof, mtu=mtu)
     except ValueError:
         logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
                         hostname, ip, tap)
@@ -258,7 +266,7 @@ class Client(object):
                  mac=None, ip=None, hostname=None,
                  subnet=None, gateway=None,
                  subnet6=None, gateway6=None, eui64=None,
-                 macspoof=None):
+                 macspoof=None, mtu=None):
         self.mac = mac
         self.ip = ip
         self.hostname = hostname
@@ -273,6 +281,7 @@ class Client(object):
         self.eui64 = eui64
         self.open_socket()
         self.macspoof = macspoof
+        self.mtu = mtu
 
     def is_valid(self):
         return self.mac is not None and self.hostname is not None
@@ -821,6 +830,8 @@ path, str(e))
             ]
             if subnet.gw:
                 dhcp_options += [("router", subnet.gw)]
+            if binding.mtu:
+                dhcp_options += [("interface_mtu", binding.mtu)]
             dhcp_options += [("name_server", x) for x in self.dhcp_nameservers]
 
         elif req_type == DHCPINFORM:
@@ -913,6 +924,8 @@ path, str(e))
         if self.ipv6_nameservers:
             resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                      lifetime=self.ra_period * 3)
+        if binding.mtu:
+            resp /= ICMPv6NDOptMTU(mtu=binding.mtu)
 
         logging.info(" - RS: Sending RA for %s", binding)
 
@@ -1026,6 +1039,9 @@ path, str(e))
             if self.ipv6_nameservers:
                 resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                          lifetime=self.ra_period * 3)
+            if binding.mtu:
+                resp /= ICMPv6NDOptMTU(mtu=binding.mtu)
+
             try:
                 binding.sendp(resp)
             except socket.error, e:
