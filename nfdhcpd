@@ -823,7 +823,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         elif req_type == DHCPRELEASE:
             # Log and ignore
-            logging.info(" - DHCP: DHCPRELEASE from %s on %s", binding)
+            logging.info(" - DHCP: DHCPRELEASE from %s", binding)
             return
 
         # Finally, always add the server identifier and end options
