@@ -93,10 +93,12 @@ domain = string(default=None)
 
 [ipv6]
 enable_ipv6 = boolean(default=True)
+enable_dhcpv6 = boolean(default=True)
 ra_period = integer(min=1, max=4294967295)
 rs_queue = integer(min=0, max=65535)
 ns_queue = integer(min=0, max=65535)
-dhcpv6_queue = integer(min=0, max=65535)
+dhcp_queue = integer(min=0, max=65535, default=None)
+dhcpv6_queue = integer(min=0, max=65535, default=None)
 nameservers = ip_addr_list(family=6)
 domains = force_list(default=None)
 """
@@ -1255,12 +1257,20 @@ if __name__ == "__main__":
 
     if config["ipv6"].as_bool("enable_ipv6"):
         proxy_opts.update({
-            "dhcpv6_queue_num": config["ipv6"].as_int("dhcpv6_queue"),
             "rs_queue_num": config["ipv6"].as_int("rs_queue"),
             "ns_queue_num": config["ipv6"].as_int("ns_queue"),
             "ra_period": config["ipv6"].as_int("ra_period"),
             "ipv6_nameservers": config["ipv6"]["nameservers"],
             "dhcpv6_domains": config["ipv6"]["domains"],
+        })
+
+    if config["ipv6"].as_bool("enable_ipv6") and config["ipv6"].as_bool("enable_dhcpv6"):
+        try:
+            transition_dhcpv6_queue = config["ipv6"].as_int("dhcpv6_queue")
+        except:
+            transition_dhcpv6_queue = config["ipv6"].as_int("dhcp_queue")
+        proxy_opts.update({
+            "dhcpv6_queue_num": transition_dhcpv6_queue,
         })
 
     # pylint: disable=W0142
