@@ -203,6 +203,7 @@ def parse_binding_file(path):
         eui64 = None
         macspoof = None
         mtu = None
+        private = None
 
         for line in iffile:
             if line.startswith("IP="):
@@ -227,6 +228,8 @@ def parse_binding_file(path):
                 macspoof = get_value(line)
             elif line.startswith("MTU="):
                 mtu = int(get_value(line))
+            elif line.startswith("PRIVATE="):
+                private = get_value(line)
     finally:
         iffile.close()
 
@@ -234,7 +237,7 @@ def parse_binding_file(path):
         return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
                       indev=indev, subnet=subnet, gateway=gateway,
                       subnet6=subnet6, gateway6=gateway6, eui64=eui64,
-                      macspoof=macspoof, mtu=mtu)
+                      macspoof=macspoof, mtu=mtu, private=private)
     except ValueError:
         logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
                         hostname, ip, tap)
@@ -277,7 +280,7 @@ class Client(object):
                  mac=None, ip=None, hostname=None,
                  subnet=None, gateway=None,
                  subnet6=None, gateway6=None, eui64=None,
-                 macspoof=None, mtu=None):
+                 macspoof=None, mtu=None, private=None):
         self.mac = mac
         self.ip = ip
         self.hostname = hostname
@@ -293,6 +296,7 @@ class Client(object):
         self.open_socket()
         self.macspoof = macspoof
         self.mtu = mtu
+        self.private = private
 
     def is_valid(self):
         return self.mac is not None and self.hostname is not None
@@ -838,7 +842,7 @@ path, str(e))
                  ("renewal_time", self.lease_renewal),
                  ("lease_time", self.lease_lifetime),
             ]
-            if subnet.gw:
+            if subnet.gw and binding.private is None:
                 dhcp_options += [("router", subnet.gw)]
             if binding.mtu:
                 dhcp_options += [("interface_mtu", binding.mtu)]
