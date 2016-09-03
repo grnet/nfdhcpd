@@ -784,7 +784,7 @@ path, str(e))
             return
 
         if not binding.ip:
-            logging.info(" - DHCP: No IP found in binding file %s.", binding)
+            logging.debug(" - DHCP: No IP found in binding file %s.", binding)
             return
 
         if self.dhcp_server_on_link is True:
