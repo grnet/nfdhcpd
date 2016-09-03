@@ -66,8 +66,6 @@ scapy_dhcp.DHCPRevOptions["interface_mtu"] = (26, scapy_dhcp.DHCPOptions[26])
 
 
 DEFAULT_CONFIG = "/etc/nfdhcpd/nfdhcpd.conf"
-DEFAULT_PATH = "/var/run/ganeti-dhcpd"
-DEFAULT_USER = "nobody"
 DEFAULT_LEASE_LIFETIME = 604800 # 1 week
 DEFAULT_LEASE_RENEWAL = 600  # 10 min
 DEFAULT_RA_PERIOD = 300 # seconds
@@ -176,7 +174,7 @@ def get_indev(payload):
 
 
 def parse_binding_file(path):
-    """ Read a client configuration from a tap file
+    """ Read a client configuration binding file
 
     """
     logging.info("Parsing binding file %s", path)
@@ -302,7 +300,7 @@ class Client(object):
 
     def open_socket(self):
 
-        logging.info(" - Opening L2 socket and binding to %s", self.tap)
+        logging.debug(" - Opening L2 socket and binding to %s", self.tap)
         try:
             s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, ETH_P_ALL)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
@@ -703,7 +701,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         try:
             tap = os.path.basename(path)
 
-            logging.info("Updating configuration for %s", tap)
+            logging.debug("Updating configuration for %s", tap)
             binding = parse_binding_file(path)
             if binding is None:
                 return
@@ -719,7 +717,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     else:
                         self.clients[ifindex] = binding
                         client = ifindex
-                    logging.info(" - Added client %s. %s", client, binding)
+                    logging.debug(" - Added client %s. %s", client, binding)
         except Exception, e:
             logging.warn("Error while adding interface from path %s: %s",
 path, str(e))
