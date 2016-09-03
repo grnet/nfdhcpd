@@ -226,7 +226,7 @@ def parse_binding_file(path):
             elif line.startswith("MACSPOOF="):
                 macspoof = get_value(line)
             elif line.startswith("MTU="):
-                mtu = get_value(line)
+                mtu = int(get_value(line))
     finally:
         iffile.close()
 
