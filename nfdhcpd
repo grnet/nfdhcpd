@@ -185,48 +185,51 @@ def parse_binding_file(path):
         logging.warn(" - Unable to open binding file %s: %s", path, str(e))
         return None
 
-    tap = os.path.basename(path)
-    indev = None
-    mac = None
-    ip = None
-    hostname = None
-    subnet = None
-    gateway = None
-    subnet6 = None
-    gateway6 = None
-    eui64 = None
-    macspoof = None
-    mtu = None
-
     def get_value(line):
         v = line.strip().split('=')[1]
         if v == '':
             return None
         return v
 
-    for line in iffile:
-        if line.startswith("IP="):
-            ip = get_value(line)
-        elif line.startswith("MAC="):
-            mac = get_value(line)
-        elif line.startswith("HOSTNAME="):
-            hostname = get_value(line)
-        elif line.startswith("INDEV="):
-            indev = get_value(line)
-        elif line.startswith("SUBNET="):
-            subnet = get_value(line)
-        elif line.startswith("GATEWAY="):
-            gateway = get_value(line)
-        elif line.startswith("SUBNET6="):
-            subnet6 = get_value(line)
-        elif line.startswith("GATEWAY6="):
-            gateway6 = get_value(line)
-        elif line.startswith("EUI64="):
-            eui64 = get_value(line)
-        elif line.startswith("MACSPOOF="):
-            macspoof = get_value(line)
-        elif line.startswith("MTU="):
-            mtu = get_value(line)
+    try:
+        tap = os.path.basename(path)
+        indev = None
+        mac = None
+        ip = None
+        hostname = None
+        subnet = None
+        gateway = None
+        subnet6 = None
+        gateway6 = None
+        eui64 = None
+        macspoof = None
+        mtu = None
+
+        for line in iffile:
+            if line.startswith("IP="):
+                ip = get_value(line)
+            elif line.startswith("MAC="):
+                mac = get_value(line)
+            elif line.startswith("HOSTNAME="):
+                hostname = get_value(line)
+            elif line.startswith("INDEV="):
+                indev = get_value(line)
+            elif line.startswith("SUBNET="):
+                subnet = get_value(line)
+            elif line.startswith("GATEWAY="):
+                gateway = get_value(line)
+            elif line.startswith("SUBNET6="):
+                subnet6 = get_value(line)
+            elif line.startswith("GATEWAY6="):
+                gateway6 = get_value(line)
+            elif line.startswith("EUI64="):
+                eui64 = get_value(line)
+            elif line.startswith("MACSPOOF="):
+                macspoof = get_value(line)
+            elif line.startswith("MTU="):
+                mtu = get_value(line)
+    finally:
+        iffile.close()
 
     try:
         return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
