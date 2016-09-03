@@ -928,8 +928,13 @@ path, str(e))
 
         logging.debug(" - RS: Generating response for %s", binding)
 
+        # Enable Other Configuration Flag only when the DHCPv6 functionality is enabled
+        other_config=0
+        if config["ipv6"].as_bool("enable_dhcpv6"):
+            other_config=1
+
         resp = Ether(src=indevmac)/\
-               IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
+               IPv6(src=str(ifll))/ICMPv6ND_RA(O=other_config, routerlifetime=14400)/\
                ICMPv6NDOptPrefixInfo(prefix=str(subnet.prefix),
                                      prefixlen=subnet.prefixlen)
 
