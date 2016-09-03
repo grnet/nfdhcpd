@@ -57,6 +57,7 @@ from scapy.layers.dhcp import BOOTP, DHCP
 from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
                                DHCP6OptServerId, DHCP6OptClientId, \
                                DUID_LLT, DHCP6_InfoRequest, DHCP6OptDNSDomains
+from scapy.fields import ShortField
 import scapy.layers.dhcp as scapy_dhcp
 
 scapy_dhcp.DHCPOptions[26] = ShortField("interface_mtu", 1500)
@@ -938,7 +939,7 @@ path, str(e))
 
         resp = Ether(src=indevmac)/\
                IPv6(src=str(ifll))/ICMPv6ND_RA(O=other_config, routerlifetime=14400)/\
-               ICMPv6NDOptPrefixInfo(prefix=subnet.gw or prefix=str(subnet.prefix),
+               ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
                                      prefixlen=subnet.prefixlen,
                                      R=1 if subnet.gw else 0)
 
@@ -1061,7 +1062,7 @@ path, str(e))
                 continue
             resp = Ether(src=indevmac)/\
                    IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
-                   ICMPv6NDOptPrefixInfo(prefix=subnet.gw or prefix=str(subnet.prefix),
+                   ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
                                          prefixlen=subnet.prefixlen,
                                          R=1 if subnet.gw else 0)
             if self.ipv6_nameservers:
