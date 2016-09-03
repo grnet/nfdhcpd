@@ -654,6 +654,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             except ValueError, e:
                 logging.warn(" - Failed to get ifindex for %s, cannot parse"
                              " sysfs output '%s'", iface, ifindex)
+                self.remove_tap(iface)
         except EnvironmentError, e:
             logging.warn(" - Error reading %s's ifindex from sysfs: %s",
                          iface, str(e))
@@ -685,6 +686,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except EnvironmentError, e:
             logging.warn(" - Failed to read hw address for %s from sysfs: %s",
                          iface, str(e))
+            self.remove_tap(iface)
         finally:
             f.close()
 
