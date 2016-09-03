@@ -530,6 +530,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
+        if not indevmac:
+            logging.debug(" - DHCPv6: Could not get MAC for %s", binding)
+            return
         ifll = subnet.make_ll64(indevmac)
         if ifll is None:
             return
@@ -913,6 +916,10 @@ path, str(e))
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
+        if not indevmac:
+            logging.debug(" - RS: Could not get MAC for %s", binding)
+            return
+
         ifll = subnet.make_ll64(indevmac)
         if ifll is None:
             return
@@ -987,6 +994,9 @@ path, str(e))
             return
 
         indevmac = self.get_iface_hw_addr(binding.indev)
+        if not indevmac:
+            logging.debug(" - NS: Could not get MAC for %s", binding)
+            return
 
         ifll = subnet.make_ll64(indevmac)
         if ifll is None:
@@ -1032,6 +1042,9 @@ path, str(e))
                 logging.debug(" - RA: Skipping %s", binding)
                 continue
             indevmac = self.get_iface_hw_addr(indev)
+            if not indevmac:
+                logging.debug(" - RA: Could not get MAC for %s", binding)
+                return
             ifll = subnet.make_ll64(indevmac)
             if ifll is None:
                 continue
