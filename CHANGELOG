@@ -1,3 +1,8 @@
+Changes with nfdhcpd 0.14 (09/09/2016)
+
+  * Documentation fixes
+  * Cater for openvswitch mode of operation for VM nics in scripts/common-cust.sh
+
 Changes with nfdhcpd 0.13.6 (02/09/2016)
 
   * Ability to send MTU values through DHCP or RA packages.
