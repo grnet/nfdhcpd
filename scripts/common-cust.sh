@@ -61,6 +61,8 @@ function setup_firewall_ganetimgr {
             FERM_MODE='interface'
         elif [ "$MODE" = "bridged" ]; then
             FERM_MODE='mod physdev physdev-in'
+        elif [ "$MODE" = "openvswitch" ]; then
+            FERM_MODE='mod physdev physdev-in'
         fi
 
         # Create a single jump because multiple @subchain declarations
