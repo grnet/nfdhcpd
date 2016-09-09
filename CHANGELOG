@@ -1,0 +1,105 @@
+Changes with nfdhcpd 0.14 (09/09/2016)
+
+  * Documentation fixes
+  * Cater for openvswitch mode of operation for VM nics in scripts/common-cust.sh
+
+Changes with nfdhcpd 0.13.6 (02/09/2016)
+
+  * Ability to send MTU values through DHCP or RA packages.
+  * Make DHCPv6 optional
+  * Don't crash when reading the old nfdhcpd.conf file before dhcp_queue was
+    renamed to dhcpv6_queue
+  * Remove unused variable in log
+  * File cleanup
+
+Changes with nfdhcpd 0.13.5 (31/08/2016)
+
+  * Rename dhcp_queue of IPv6 to dhcpv6_queue to make it clearer.
+  * Add physdev ferm rules to match packets from bridges. Remove previous
+    rules about prv+ and br+ interfaces.
+  * Disable logging of raw packets sent even in debug level.
+  * Update documentation
+  * Lots of logging format fixes.
+
+Changes with nfdhcpd 0.13.4 (31/08/2016)
+
+  * change some warn to debug
+
+Changes with nfdhcpd 0.13.3 (29/08/2016)
+
+  * Some changes in logging format
+
+Changes with nfdhcpd 0.13.2 (29/08/2016)
+
+  * Some fixes related to DHCPv6
+
+Changes with nfdhcpd 0.13.1 (29/08/2016)
+
+  * Provide DNS Search List in DHCPv6 Reply
+
+Changes with nfdhcpd 0.13.0 (29/08/2016)
+
+  * Support stateless IPv6 autoconfiguration with DHCPv6 for DNS info
+
+Changes with nfdhcpd 0.11.9 (12/08/2016)
+
+  * Fix NS replies debug messages
+  * Fix IPv6 Router Solicitation replies
+
+Changes with nfdhcpd 0.11.8 (14/01/2016)
+
+  * Make clear-proxy-ndp loop over instance's multiple NICs
+  * Let dhcp_response() use an on-link address for source IP and Server
+    Identifier (this is optional and defaults to false)
+  * Allow for disabling nfhdcpd's default MAC address spoofing protection
+  * Add isolation capabilities to bridged networks
+  * Prefer another ganeti variable name for comparison in clear-proxy-ndp
+  * Allow binding files without IP entry
+
+Changes with nfdhcpd 0.11.7 (07/01/2014)
+
+  * Fix handling of bridged interfaces for ViMa networks
+  * Changed nfqueue-bindings-python dependency to python-nfqueue
+  * ViMa-specific fixes to common-cust.sh
+
+Changes with nfdhcpd 0.11.2 (09/08/2013)
+
+  * Fixed some errors in clear-proxy-ndp (network6 detection and running the arp only in the new primary)
+  * Fixed a static sting value in the /etc/ganeti/kvm-vif-bridge and addes some comments
+  * Send Unsolicited NA after migration to speed up nd change for the VMs IP
+  * Send GARP after migration to speed up mac change for the VMs IP
+  * use custom kvm-vif-bridge and clear-proxy-ndp scripts suitable
+    for ViMa's ganeti-2.5
+  * Fix two critical bugs (blocking send/capng_update()) and add logging
+
+Changes with nfdhcpd 0.11.0 (03/07/2012)
+
+  * Refactor nfdhcpd to support extended binding files and bridged clients
+
+Changes with nfdhcpd 0.6 (22/06/2011)
+
+  * Add mac2eui64 utility
+
+Changes with nfdhcpd 0.5 (22/06/2011)
+
+  * Enable logging of unhandled exceptions
+  * Do not send periodic RAs on IPv6-less interfaces
+  * Ignore requests on unknown interfaces
+
+Changes with nfdhcpd 0.4 (28/03/2011)
+
+  * Ignore IPv6 link-local subnets
+  * Handle invalid binding files in a more robust way 
+
+Changes with nfdhcpd 0.3 (11/03/2011)
+
+  * Improved error handling
+  * Refactored code for improved performance 
+
+Changes with nfdhcpd 0.2 (03/12/2010)
+
+  * Various improvements, including configuration file support and RDNSS support 
+
+Changes with nfdhcpd 0.1 (15/10/2010)
+
+  * Initial Release.
