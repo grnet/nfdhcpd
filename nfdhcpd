@@ -97,7 +97,7 @@ domain = string(default=None)
 
 [ipv6]
 enable_ipv6 = boolean(default=True)
-enable_dhcpv6 = boolean(default=True)
+enable_dhcpv6 = boolean(default=False)
 ra_period = integer(min=1, max=4294967295)
 rs_queue = integer(min=0, max=65535)
 ns_queue = integer(min=0, max=65535)
