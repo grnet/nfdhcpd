@@ -2,7 +2,7 @@
 #
 
 # nfdcpd: A promiscuous, NFQUEUE-based DHCP, DHCPv6 and Router Advertisement server for virtual machine hosting
-# Copyright (c) 2010-2016 GRNET SA
+# Copyright (c) 2010-2017 GRNET SA
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -1162,7 +1162,7 @@ path, str(e))
 
 
 
-if __name__ == "__main__":
+def main():
     import capng
     import optparse
     from cStringIO import StringIO
@@ -1298,7 +1298,7 @@ if __name__ == "__main__":
                             " another instance running?", pidfile.path)
             sys.exit(1)
 
-    logging.info("Starting up")
+    logging.info("Starting up nfdhcpd v%s", __version__)
     logging.info("Running as %s (uid:%d, gid: %d)",
                   config["general"]["user"], uid.pw_uid, uid.pw_gid)
 

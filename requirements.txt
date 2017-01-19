@@ -1,0 +1,7 @@
+python-daemon < 2.0
+#python-nfqueue
+pyinotify
+setproctitle
+scapy
+#python-cap-ng
+configobj

@@ -1,0 +1,6 @@
+include README.md CHANGELOG CONTRIBUTORS COPYING nfdhcpd.conf
+recursive-include scripts *
+recursive-include contrib *
+recursive-include docs *
+prune docs/_build
+
