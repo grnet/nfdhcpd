@@ -455,6 +455,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self.dhcpv6_domains = dhcpv6_domains
 
         self.ipv6_enabled = False
+        self.dhcpv6 = False
 
         self.clients = {}
         #self.subnets = {}
@@ -486,6 +487,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if dhcpv6_queue_num is not None:
             self._setup_nfqueue(dhcpv6_queue_num, AF_INET6, self.dhcpv6_response, 10)
             self.ipv6_enabled = True
+            self.dhcpv6 = True
 
     def get_binding(self, ifindex, mac):
         try:
@@ -935,9 +937,7 @@ path, str(e))
         logging.debug(" - RS: Generating response for %s", binding)
 
         # Enable Other Configuration Flag only when the DHCPv6 functionality is enabled
-        other_config=0
-        if config["ipv6"].as_bool("enable_dhcpv6"):
-            other_config=1
+        other_config = 1 if self.dhcpv6 else 0
 
         resp = Ether(src=indevmac)/\
                IPv6(src=str(ifll))/ICMPv6ND_RA(O=other_config, routerlifetime=14400)/\
