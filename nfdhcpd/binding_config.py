@@ -23,6 +23,7 @@ import IPy
 from scapy.data import ETH_P_ALL
 from scapy.packet import BasePacket
 
+
 class Subnet(object):
     def __init__(self, net=None, gw=None, dev=None):
         if isinstance(net, str):
@@ -121,7 +122,6 @@ class BindingConfig(object):
     def is_valid(self):
         return self.mac is not None and self.hostname is not None
 
-
     def open_socket(self):
 
         logging.debug(" - Opening L2 socket and binding to %s", self.tap)
@@ -133,13 +133,12 @@ class BindingConfig(object):
         except socket.error, e:
             logging.warning(" - Cannot open socket %s", e)
 
-
     def sendp(self, data):
 
         if isinstance(data, BasePacket):
             data = str(data)
 
-        #logging.debug(" - Sending raw packet %r", data)
+        # logging.debug(" - Sending raw packet %r", data)
 
         try:
             count = self.socket.send(data, socket.MSG_DONTWAIT)
@@ -236,4 +235,3 @@ class BindingConfig(object):
                 " - Cannot add client for host %s and IP %s on tap %s",
                 hostname, ip, tap)
             return None
-

@@ -24,8 +24,6 @@ server for virtual machine hosting.
 
 import os
 import signal
-import errno
-import re
 import sys
 import logging
 import logging.handlers
@@ -37,7 +35,6 @@ import pwd
 import daemon
 import daemon.runner
 import daemon.pidlockfile
-import pyinotify
 import setproctitle
 import lockfile
 import IPy
@@ -129,8 +126,9 @@ def main():
         sys.exit(1)
 
     results = config.validate(validator)
-    if results != True:
-        logging.fatal("Configuration file validation failed! See errors below:")
+    if results is not True:
+        logging.fatal(
+            "Configuration file validation failed! See errors below:")
         for (section_list, key, _) in configobj.flatten_errors(config,
                                                                results):
             if key is not None:
@@ -162,7 +160,7 @@ def main():
                        capng.CAP_SETPCAP)
     # change uid
     capng.capng_change_id(uid.pw_uid, uid.pw_gid,
-                          capng.CAPNG_DROP_SUPP_GRP | \
+                          capng.CAPNG_DROP_SUPP_GRP |
                           capng.CAPNG_CLEAR_BOUNDING)
 
     logger = logging.getLogger()
@@ -252,7 +250,6 @@ def main():
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)
 
     logging.info("Ready to serve requests")
-
 
     def debug_handler(signum, _):
         logging.debug('Received signal %d. Printing proxy state...', signum)

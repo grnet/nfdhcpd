@@ -31,15 +31,14 @@ import pyinotify
 
 from scapy.layers.l2 import Ether
 from scapy.layers.inet import IP, UDP
-from scapy.layers.inet6 import IPv6, ICMPv6ND_RA, ICMPv6ND_NA, \
-                               ICMPv6NDOptDstLLAddr, \
-                               ICMPv6NDOptPrefixInfo, \
-                               ICMPv6NDOptRDNSS, \
-                               ICMPv6NDOptMTU
+from scapy.layers.inet6 import (IPv6, ICMPv6ND_RA, ICMPv6ND_NA,
+                                ICMPv6NDOptDstLLAddr, ICMPv6NDOptPrefixInfo,
+                                ICMPv6NDOptRDNSS, ICMPv6NDOptMTU)
 from scapy.layers.dhcp import BOOTP, DHCP
-from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
-                               DHCP6OptServerId, DHCP6OptClientId, \
-                               DUID_LLT, DHCP6_InfoRequest, DHCP6OptDNSDomains
+from scapy.layers.dhcp6 import (DHCP6_Reply, DHCP6OptDNSServers,
+                                DHCP6OptServerId, DHCP6OptClientId,
+                                DUID_LLT, DHCP6_InfoRequest,
+                                DHCP6OptDNSDomains)
 from scapy.fields import ShortField
 import scapy.layers.dhcp as scapy_dhcp
 
@@ -49,9 +48,9 @@ scapy_dhcp.DHCPOptions[26] = ShortField("interface_mtu", 1500)
 scapy_dhcp.DHCPRevOptions["interface_mtu"] = (26, scapy_dhcp.DHCPOptions[26])
 
 
-DEFAULT_LEASE_LIFETIME = 604800 # 1 week
+DEFAULT_LEASE_LIFETIME = 604800  # 1 week
 DEFAULT_LEASE_RENEWAL = 600  # 10 min
-DEFAULT_RA_PERIOD = 300 # seconds
+DEFAULT_RA_PERIOD = 300  # seconds
 DHCP_DUMMY_SERVER_IP = "1.2.3.4"
 
 SYSFS_NET = "/sys/class/net"
@@ -82,6 +81,7 @@ DHCP_REQRESP = {
     DHCPINFORM: DHCPACK,
     }
 
+
 def ipv62mac(ipv6):
     # remove subnet info if given
     subnet_index = ipv6.find("/")
@@ -103,6 +103,7 @@ def ipv62mac(ipv6):
 
     return ":".join(mac_parts)
 
+
 def get_indev(payload):
     try:
         indev_ifindex = payload.get_physindev()
@@ -111,7 +112,7 @@ def get_indev(payload):
                           indev_ifindex)
             return indev_ifindex
     except AttributeError:
-        #TODO: return error value
+        # TODO: return error value
         logging.error("No get_physindev() supported")
         return 0
 
@@ -120,7 +121,6 @@ def get_indev(payload):
                   indev_ifindex)
 
     return indev_ifindex
-
 
 
 class ClientFileHandler(pyinotify.ProcessEvent):
@@ -144,7 +144,7 @@ class ClientFileHandler(pyinotify.ProcessEvent):
         """
         self.server.add_tap(os.path.join(event.path, event.name))
 
-    def process_IN_Q_OVERFLOW(self, event): # pylint: disable=C0103
+    def process_IN_Q_OVERFLOW(self, event):  # pylint: disable=C0103
         """ Event overflow handler
 
         Currently this reads all interface configs
@@ -195,9 +195,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         self.dhcpv6 = False
 
         self.clients = {}
-        #self.subnets = {}
-        #self.ifaces = {}
-        #self.v6nets = {}
+        # self.subnets = {}
+        # self.ifaces = {}
+        # self.v6nets = {}
         self.nfq = {}
 
         # Inotify setup
@@ -258,8 +258,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
         pkt = IPv6(payload.get_data())
         indev = get_indev(payload)
 
-        #logging.debug(pkt.show())
-        #TODO: figure out how to find the src mac
+        # logging.debug(pkt.show())
+        # TODO: figure out how to find the src mac
         mac = None
         binding = self.get_binding(indev, mac)
         if binding is None:
@@ -300,15 +300,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
         dnsdomains = str(DHCP6OptDNSDomains(dnsdomains=domains))
         dnsservers = str(DHCP6OptDNSServers(dnsservers=self.ipv6_nameservers))
 
-        resp = Ether(src=indevmac, dst=binding.mac)/\
-               IPv6(tc=192, src=str(ifll), dst=str(ofll))/\
-               UDP(sport=pkt.dport, dport=pkt.sport)/\
-               DHCP6_Reply(trid=pkt[DHCP6_InfoRequest].trid)/\
-               DHCP6OptClientId(duid=pkt[DHCP6OptClientId].duid)/\
-               DHCP6OptServerId(duid=DUID_LLT(lladdr=indevmac,
-                                              timeval=time.time()))/\
-               DHCP6OptDNSDomains(dnsdomains)/\
-               DHCP6OptDNSServers(dnsservers)
+        resp = (Ether(src=indevmac, dst=binding.mac) /
+                IPv6(tc=192, src=str(ifll), dst=str(ofll)) /
+                UDP(sport=pkt.dport, dport=pkt.sport) /
+                DHCP6_Reply(trid=pkt[DHCP6_InfoRequest].trid) /
+                DHCP6OptClientId(duid=pkt[DHCP6OptClientId].duid) /
+                DHCP6OptServerId(duid=DUID_LLT(lladdr=indevmac,
+                                               timeval=time.time())) /
+                DHCP6OptDNSDomains(dnsdomains) /
+                DHCP6OptDNSServers(dnsservers))
 
         logging.info(" - DHCPv6: Response for %s", binding)
         try:
@@ -319,7 +319,6 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except Exception, e:
             logging.warn(" - DHCPv6: Unkown error during response on %s: %s",
                          binding, str(e))
-
 
     @staticmethod
     def get_addr_on_link(binding, af=AF_INET):
@@ -483,7 +482,6 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except KeyError:
             logging.error("Client on %s disappeared!!!", tap)
 
-
     def dhcp_response(self, arg1, arg2=None):  # pylint: disable=W0613,R0914
         """ Generate a reply to bnetfilter-queue-deva BOOTP/DHCP request
 
@@ -499,7 +497,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             payload = arg1
         # Decode the response - NFQUEUE relays IP packets
         pkt = IP(payload.get_data())
-        #logging.debug(pkt.show())
+        # logging.debug(pkt.show())
 
         # Get the client MAC address
         try:
@@ -545,7 +543,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         else:
             dhcp_srv_ip = self.dhcp_server_ip
 
-        if not DHCP in pkt:
+        if DHCP not in pkt:
             logging.warn(" - DHCP: Invalid request with no DHCP ;payload "
                          "found. %s", binding)
             return
@@ -553,9 +551,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.debug(" - DHCP: Generating response for %s, src %s", binding,
                       dhcp_srv_ip)
 
-        resp = Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev))/\
-               IP(src=dhcp_srv_ip, dst=binding.ip)/\
-               UDP(sport=pkt.dport, dport=pkt.sport)/resp
+        resp = (Ether(dst=mac, src=self.get_iface_hw_addr(binding.indev)) /
+                IP(src=dhcp_srv_ip, dst=binding.ip) /
+                UDP(sport=pkt.dport, dport=pkt.sport) / resp)
         subnet = binding.net
 
         dhcp_options = []
@@ -624,8 +622,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         except socket.error, e:
             logging.warn(" - DHCP: Response on %s failed: %s", binding, str(e))
         except Exception, e:
-            logging.warn(" - DHCP: Unkown error during DHCP response on %s: %s",
-                         binding, str(e))
+            logging.warn(
+                " - DHCP: Unkown error during DHCP response on %s: %s",
+                binding, str(e))
 
     def rs_response(self, arg1, arg2=None):  # pylint: disable=W0613
         """ Generate a reply to an ICMPv6 router solicitation
@@ -641,7 +640,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         else:
             payload = arg1
         pkt = IPv6(payload.get_data())
-        #logging.debug(pkt.show())
+        # logging.debug(pkt.show())
         try:
             mac = ipv62mac(pkt.src)
             logging.debug(" - RS: MAC %s", mac)
@@ -688,12 +687,12 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # enabled
         other_config = 1 if self.dhcpv6 else 0
 
-        resp = Ether(src=indevmac)/\
-               IPv6(src=str(ifll))/\
-               ICMPv6ND_RA(O=other_config, routerlifetime=14400)/\
-               ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
-                                     prefixlen=subnet.prefixlen,
-                                     R=1 if subnet.gw else 0)
+        resp = (Ether(src=indevmac) /
+                IPv6(src=str(ifll)) /
+                ICMPv6ND_RA(O=other_config, routerlifetime=14400) /
+                ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
+                                      prefixlen=subnet.prefixlen,
+                                      R=1 if subnet.gw else 0))
 
         if self.ipv6_nameservers:
             resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
@@ -728,14 +727,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
             payload = arg1
 
         ns = IPv6(payload.get_data())
-        #logging.debug(ns.show())
+        # logging.debug(ns.show())
         try:
             mac = ns.lladdr
             logging.debug(" - NS: MAC: %s", mac)
         except:
             logging.debug(" - NS: LLaddr not contained in NS. Ignoring.")
             return
-
 
         indev = get_indev(payload)
 
@@ -775,10 +773,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         logging.debug(" - NS: Generating NA for %s", binding)
 
-        resp = Ether(src=indevmac, dst=binding.mac)/\
-               IPv6(src=str(ifll), dst=ns.src)/\
-               ICMPv6ND_NA(R=1, O=0, S=1, tgt=ns.tgt)/\
-               ICMPv6NDOptDstLLAddr(lladdr=indevmac)
+        resp = (Ether(src=indevmac, dst=binding.mac) /
+                IPv6(src=str(ifll), dst=ns.src) /
+                ICMPv6ND_NA(R=1, O=0, S=1, tgt=ns.tgt) /
+                ICMPv6NDOptDstLLAddr(lladdr=indevmac))
 
         logging.info(" - NS: Sending NA for %s ", binding)
 
@@ -815,11 +813,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
             ifll = subnet.make_ll64(indevmac)
             if ifll is None:
                 continue
-            resp = Ether(src=indevmac)/\
-                IPv6(src=str(ifll))/ICMPv6ND_RA(O=1, routerlifetime=14400)/\
-                ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
-                                      prefixlen=subnet.prefixlen,
-                                      R=1 if subnet.gw else 0)
+            resp = \
+                (Ether(src=indevmac) /
+                 IPv6(src=str(ifll)) /
+                 ICMPv6ND_RA(O=1, routerlifetime=14400) /
+                 ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
+                                       prefixlen=subnet.prefixlen,
+                                       R=1 if subnet.gw else 0))
             if self.ipv6_nameservers:
                 resp /= ICMPv6NDOptRDNSS(dns=self.ipv6_nameservers,
                                          lifetime=self.ra_period * 3)
@@ -878,8 +878,8 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
             if rlist:
                 if iwfd in rlist:
-                # First check if there are any inotify (= configuration change)
-                # events
+                    # First check if there are any inotify (= configuration
+                    # change) events
                     self.notifier.read_events()
                     self.notifier.process_events()
                     rlist.remove(iwfd)
@@ -913,5 +913,3 @@ class VMNetProxy(object):  # pylint: disable=R0902
         for k, cl in self.clients.items():
             logging.info("%10s | %20s %20s %10s %20s %40s",
                          k, cl.hostname, cl.mac, cl.tap, cl.ip, cl.eui64)
-
-
