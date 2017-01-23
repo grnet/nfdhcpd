@@ -156,8 +156,8 @@ class BindingConfig(object):
                          count, ldata)
 
     def __repr__(self):
-        ret =  "hostname %s, tap %s, mac %s" % \
-               (self.hostname, self.tap, self.mac)
+        ret = "hostname %s, tap %s, mac %s" % \
+              (self.hostname, self.tap, self.mac)
         if self.ip:
             ret += ", ip %s" % self.ip
         if self.eui64:
@@ -232,7 +232,8 @@ class BindingConfig(object):
                                  eui64=eui64, macspoof=macspoof, mtu=mtu,
                                  private=private)
         except ValueError:
-            logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
-                            hostname, ip, tap)
+            logging.warning(
+                " - Cannot add client for host %s and IP %s on tap %s",
+                hostname, ip, tap)
             return None
 

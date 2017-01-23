@@ -106,5 +106,5 @@ disable-msg-cat=
 disable-msg=W0511,R0922,W0201
 
 # The new pylint 0.21+ style (plus the similarities checker, which is no longer
-# a separate opiton, but a generic disable control)
-disable=W0511,R0922,W0201,R0922,R0801,I0011
+# a separate option, but a generic disable control)
+disable=W0511,R0922,W0201,R0922,R0801,I0011,E0012

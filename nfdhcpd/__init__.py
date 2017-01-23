@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 #
 
-# nfdcpd: A promiscuous, NFQUEUE-based DHCP, DHCPv6 and Router Advertisement server for virtual machine hosting
 # Copyright (c) 2010-2017 GRNET SA
 #
 #    This program is free software; you can redistribute it and/or modify
@@ -19,6 +18,10 @@
 #    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+"""nfdcpd: A promiscuous, NFQUEUE-based DHCP, DHCPv6 and Router Advertisement
+server for virtual machine hosting.
+"""
+
 import os
 import signal
 import errno
@@ -27,15 +30,21 @@ import sys
 import logging
 import logging.handlers
 import traceback
+import optparse
+import cStringIO
+import pwd
 
 import daemon
 import daemon.runner
 import daemon.pidlockfile
 import pyinotify
 import setproctitle
-from lockfile import LockTimeout
-
+import lockfile
 import IPy
+import capng
+import configobj
+import validate
+
 
 from nfdhcpd.vm_net_proxy import VMNetProxy
 
@@ -75,14 +84,6 @@ domains = force_list(default=None)
 
 
 def main():
-    import capng
-    import optparse
-    from cStringIO import StringIO
-    from pwd import getpwnam, getpwuid
-    from configobj import ConfigObj, ConfigObjError, flatten_errors
-
-    import validate
-
     validator = validate.Validator()
 
     def is_ip_list(value, family=4):
@@ -106,7 +107,7 @@ def main():
         return value
 
     validator.functions["ip_addr_list"] = is_ip_list
-    config_spec = StringIO(CONFIG_SPEC)
+    config_spec = cStringIO.StringIO(CONFIG_SPEC)
 
     parser = optparse.OptionParser()
     parser.add_option("-c", "--config", dest="config_file",
@@ -118,11 +119,11 @@ def main():
                       dest="daemonize", default=True,
                       help="Do not daemonize, stay in the foreground")
 
-    opts, args = parser.parse_args()
+    opts, _ = parser.parse_args()
 
     try:
-        config = ConfigObj(opts.config_file, configspec=config_spec)
-    except ConfigObjError, err:
+        config = configobj.ConfigObj(opts.config_file, configspec=config_spec)
+    except configobj.ConfigObjError, err:
         sys.stderr.write("Failed to parse config file %s: %s" %
                          (opts.config_file, str(err)))
         sys.exit(1)
@@ -130,7 +131,8 @@ def main():
     results = config.validate(validator)
     if results != True:
         logging.fatal("Configuration file validation failed! See errors below:")
-        for (section_list, key, unused) in flatten_errors(config, results):
+        for (section_list, key, _) in configobj.flatten_errors(config,
+                                                               results):
             if key is not None:
                 logging.fatal(" '%s' in section '%s' failed validation",
                               key, ", ".join(section_list))
@@ -140,9 +142,9 @@ def main():
         sys.exit(1)
 
     try:
-        uid = getpwuid(config["general"].as_int("user"))
+        uid = pwd.getpwuid(config["general"].as_int("user"))
     except ValueError:
-        uid = getpwnam(config["general"]["user"])
+        uid = pwd.getpwnam(config["general"]["user"])
 
     # Keep only the capabilities we need
     # CAP_NET_ADMIN: we need to send nfqueue packet verdicts to a netlinkgroup
@@ -188,7 +190,7 @@ def main():
     # set individual values for command-line arguments, so only show
     # the name of the executable instead.
     # setproctitle.setproctitle("\x00".join(sys.argv))
-    setproctitle.setproctitle(sys.argv[0])
+    setproctitle.setproctitle(sys.argv[0])  # pylint: disable=no-member
 
     if opts.daemonize:
         pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
@@ -205,14 +207,17 @@ def main():
                                  files_preserve=[handler.stream])
         try:
             d.open()
-        except (daemon.pidlockfile.AlreadyLocked, LockTimeout):
+            # Check: http://stackoverflow.com/questions/21053578/
+            #        python-python-daemon-lockfile-timeout-on-lock-aquire
+            # for why we are importing lockfile.LockTimeout
+        except (daemon.pidlockfile.AlreadyLocked, lockfile.LockTimeout):
             logger.critical("Failed to lock pidfile %s,"
                             " another instance running?", pidfile.path)
             sys.exit(1)
 
     logging.info("Starting up nfdhcpd v%s", __version__)
     logging.info("Running as %s (uid:%d, gid: %d)",
-                  config["general"]["user"], uid.pw_uid, uid.pw_gid)
+                 config["general"]["user"], uid.pw_uid, uid.pw_gid)
 
     proxy_opts = {}
     if config["dhcp"].as_bool("enable_dhcp"):
@@ -235,16 +240,15 @@ def main():
             "dhcpv6_domains": config["ipv6"]["domains"],
         })
 
-    if config["ipv6"].as_bool("enable_ipv6") and config["ipv6"].as_bool("enable_dhcpv6"):
+    if config["ipv6"].as_bool("enable_ipv6") and \
+            config["ipv6"].as_bool("enable_dhcpv6"):
         try:
             transition_dhcpv6_queue = config["ipv6"].as_int("dhcpv6_queue")
         except:
             transition_dhcpv6_queue = config["ipv6"].as_int("dhcp_queue")
-        proxy_opts.update({
-            "dhcpv6_queue_num": transition_dhcpv6_queue,
-        })
+        proxy_opts.update({"dhcpv6_queue_num": transition_dhcpv6_queue})
 
-    # pylint: disable=W0142
+    # pylint: disable=star-args
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)
 
     logging.info("Ready to serve requests")
