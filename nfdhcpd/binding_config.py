@@ -95,7 +95,7 @@ class Subnet(object):
         return self._make_eui64("fe80::", mac)
 
 
-class Client(object):
+class BindingConfig(object):
     def __init__(self, tap=None, indev=None,
                  mac=None, ip=None, hostname=None,
                  subnet=None, gateway=None,
@@ -164,74 +164,75 @@ class Client(object):
             ret += ", eui64 %s" % self.eui64
         return ret
 
+    @staticmethod
+    def load(path):
+        """ Read a configuration binding file
 
-def parse_binding_file(path):
-    """ Read a client configuration binding file
-
-    """
-    logging.info("Parsing binding file %s", path)
-    try:
-        iffile = open(path, 'r')
-    except EnvironmentError, e:
-        logging.warn(" - Unable to open binding file %s: %s", path, str(e))
-        return None
-
-    def get_value(line):
-        v = line.strip().split('=')[1]
-        if v == '':
+        """
+        logging.info("Parsing binding file %s", path)
+        try:
+            iffile = open(path, 'r')
+        except EnvironmentError, e:
+            logging.warn(" - Unable to open binding file %s: %s", path, str(e))
             return None
-        return v
 
-    try:
-        tap = os.path.basename(path)
-        indev = None
-        mac = None
-        ip = None
-        hostname = None
-        subnet = None
-        gateway = None
-        subnet6 = None
-        gateway6 = None
-        eui64 = None
-        macspoof = None
-        mtu = None
-        private = None
+        def get_value(line):
+            v = line.strip().split('=')[1]
+            if v == '':
+                return None
+            return v
 
-        for line in iffile:
-            if line.startswith("IP="):
-                ip = get_value(line)
-            elif line.startswith("MAC="):
-                mac = get_value(line)
-            elif line.startswith("HOSTNAME="):
-                hostname = get_value(line)
-            elif line.startswith("INDEV="):
-                indev = get_value(line)
-            elif line.startswith("SUBNET="):
-                subnet = get_value(line)
-            elif line.startswith("GATEWAY="):
-                gateway = get_value(line)
-            elif line.startswith("SUBNET6="):
-                subnet6 = get_value(line)
-            elif line.startswith("GATEWAY6="):
-                gateway6 = get_value(line)
-            elif line.startswith("EUI64="):
-                eui64 = get_value(line)
-            elif line.startswith("MACSPOOF="):
-                macspoof = get_value(line)
-            elif line.startswith("MTU="):
-                mtu = int(get_value(line))
-            elif line.startswith("PRIVATE="):
-                private = get_value(line)
-    finally:
-        iffile.close()
+        try:
+            tap = os.path.basename(path)
+            indev = None
+            mac = None
+            ip = None
+            hostname = None
+            subnet = None
+            gateway = None
+            subnet6 = None
+            gateway6 = None
+            eui64 = None
+            macspoof = None
+            mtu = None
+            private = None
 
-    try:
-        return Client(tap=tap, mac=mac, ip=ip, hostname=hostname,
-                      indev=indev, subnet=subnet, gateway=gateway,
-                      subnet6=subnet6, gateway6=gateway6, eui64=eui64,
-                      macspoof=macspoof, mtu=mtu, private=private)
-    except ValueError:
-        logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
-                        hostname, ip, tap)
-        return None
+            for line in iffile:
+                if line.startswith("IP="):
+                    ip = get_value(line)
+                elif line.startswith("MAC="):
+                    mac = get_value(line)
+                elif line.startswith("HOSTNAME="):
+                    hostname = get_value(line)
+                elif line.startswith("INDEV="):
+                    indev = get_value(line)
+                elif line.startswith("SUBNET="):
+                    subnet = get_value(line)
+                elif line.startswith("GATEWAY="):
+                    gateway = get_value(line)
+                elif line.startswith("SUBNET6="):
+                    subnet6 = get_value(line)
+                elif line.startswith("GATEWAY6="):
+                    gateway6 = get_value(line)
+                elif line.startswith("EUI64="):
+                    eui64 = get_value(line)
+                elif line.startswith("MACSPOOF="):
+                    macspoof = get_value(line)
+                elif line.startswith("MTU="):
+                    mtu = int(get_value(line))
+                elif line.startswith("PRIVATE="):
+                    private = get_value(line)
+        finally:
+            iffile.close()
+
+        try:
+            return BindingConfig(tap=tap, mac=mac, ip=ip, hostname=hostname,
+                                 indev=indev, subnet=subnet, gateway=gateway,
+                                 subnet6=subnet6, gateway6=gateway6,
+                                 eui64=eui64, macspoof=macspoof, mtu=mtu,
+                                 private=private)
+        except ValueError:
+            logging.warning(" - Cannot add client for host %s and IP %s on tap %s",
+                            hostname, ip, tap)
+            return None
 

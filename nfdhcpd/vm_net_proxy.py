@@ -44,7 +44,7 @@ from scapy.layers.dhcp6 import DHCP6_Reply, DHCP6OptDNSServers, \
 from scapy.fields import ShortField
 import scapy.layers.dhcp as scapy_dhcp
 
-from nfdhcpd.binding_config import parse_binding_file
+from nfdhcpd.binding_config import BindingConfig
 
 scapy_dhcp.DHCPOptions[26] = ShortField("interface_mtu", 1500)
 scapy_dhcp.DHCPRevOptions["interface_mtu"] = (26, scapy_dhcp.DHCPOptions[26])
@@ -445,7 +445,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             tap = os.path.basename(path)
 
             logging.debug("Updating configuration for %s", tap)
-            binding = parse_binding_file(path)
+            binding = BindingConfig.load(path)
             if binding is None:
                 return
             ifindex = self.get_ifindex(binding.tap)
