@@ -34,7 +34,15 @@ import pwd
 
 import daemon
 import daemon.runner
-import daemon.pidlockfile
+try:
+    # For daemon >= 1.6
+    # pylint: disable=no-name-in-module,import-error
+    import daemon.pidfile as pidlockfile
+except ImportError:
+    # For daemon < 1.6
+    # pylint: disable=no-name-in-module,import-error
+    import daemon.pidlockfile as pidlockfile
+
 import setproctitle
 import lockfile
 import IPy
@@ -191,7 +199,7 @@ def main():
     setproctitle.setproctitle(sys.argv[0])  # pylint: disable=no-member
 
     if opts.daemonize:
-        pidfile = daemon.pidlockfile.TimeoutPIDLockFile(
+        pidfile = pidlockfile.TimeoutPIDLockFile(
             config["general"]["pidfile"], 10)
         # Remove any stale PID files, left behind by previous invocations
         if daemon.runner.is_pidfile_stale(pidfile):
@@ -205,12 +213,11 @@ def main():
                                  files_preserve=[handler.stream])
         try:
             d.open()
-            # Check: http://stackoverflow.com/questions/21053578/
-            #        python-python-daemon-lockfile-timeout-on-lock-aquire
-            # for why we are importing lockfile.LockTimeout
-        except (daemon.pidlockfile.AlreadyLocked, lockfile.LockTimeout):
-            logger.critical("Failed to lock pidfile %s,"
-                            " another instance running?", pidfile.path)
+            # daemon internally uses lockfile and does not re-wrap the lockfile
+            # exceptions.
+        except lockfile.LockError as e:
+            logger.critical("Failed to lock pidfile: %s. Reason: %s",
+                            pidfile.path, str(e))
             sys.exit(1)
 
     logging.info("Starting up nfdhcpd v%s", __version__)

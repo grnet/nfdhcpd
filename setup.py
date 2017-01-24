@@ -36,7 +36,7 @@ setup(
     license='GNU GPLv2+',
     packages=find_packages(),
     include_package_data=True,
-    install_requires=['python-daemon<1.6', 'pyinotify', 'setproctitle',
+    install_requires=['python-daemon', 'pyinotify', 'setproctitle',
                       'scapy', 'configobj'],
     # Unresolvable dependencies:
     #   python-nfqueue, python-cap-ng

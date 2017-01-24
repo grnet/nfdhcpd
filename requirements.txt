@@ -1,4 +1,4 @@
-python-daemon < 2.0
+python-daemon
 #python-nfqueue
 pyinotify
 setproctitle
