@@ -28,7 +28,7 @@ import sys
 import logging
 import logging.handlers
 import traceback
-import optparse
+import argparse
 import cStringIO
 import pwd
 
@@ -51,6 +51,7 @@ import configobj
 import validate
 
 from nfdhcpd.vm_net_proxy import VMNetProxy
+from nfdhcpd.version import __version__
 
 DEFAULT_CONFIG = "/etc/nfdhcpd/nfdhcpd.conf"
 LOG_FILENAME = "nfdhcpd.log"
@@ -116,17 +117,19 @@ def main():
     validator.functions["ip_addr_list"] = is_ip_list
     config_spec = cStringIO.StringIO(CONFIG_SPEC)
 
-    parser = optparse.OptionParser()
-    parser.add_option("-c", "--config", dest="config_file",
-                      help="The location of the data files", metavar="FILE",
-                      default=DEFAULT_CONFIG)
-    parser.add_option("-d", "--debug", action="store_true", dest="debug",
-                      help="Turn on debugging messages")
-    parser.add_option("-f", "--foreground", action="store_false",
-                      dest="daemonize", default=True,
-                      help="Do not daemonize, stay in the foreground")
+    parser = argparse.ArgumentParser(description=__doc__, version=__version__)
+    parser.add_argument(
+        "-c", "--config", dest="config_file", metavar="FILE",
+        help="The location of the configuration file [%s]" % DEFAULT_CONFIG,
+        default=DEFAULT_CONFIG)
+    parser.add_argument(
+        "-d", "--debug", action="store_true", dest="debug", default=False,
+        help="Turn on debugging messages")
+    parser.add_argument(
+        "-f", "--foreground", action="store_false", default=True,
+        dest="daemonize", help="Do not daemonize, stay in the foreground")
 
-    opts, _ = parser.parse_args()
+    opts = parser.parse_args()
 
     try:
         config = configobj.ConfigObj(opts.config_file, configspec=config_spec)
