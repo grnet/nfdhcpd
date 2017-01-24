@@ -130,7 +130,7 @@ def main():
 
     try:
         config = configobj.ConfigObj(opts.config_file, configspec=config_spec)
-    except configobj.ConfigObjError, err:
+    except configobj.ConfigObjError as err:
         sys.stderr.write("Failed to parse config file %s: %s" %
                          (opts.config_file, str(err)))
         sys.exit(1)

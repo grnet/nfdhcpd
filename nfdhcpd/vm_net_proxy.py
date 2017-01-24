@@ -313,10 +313,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - DHCPv6: Response for %s", binding)
         try:
             binding.sendp(resp)
-        except socket.error, e:
+        except socket.error as e:
             logging.warn(" - DHCPv6: Response on %s failed: %s",
                          binding, str(e))
-        except Exception, e:
+        except Exception as e:
             logging.warn(" - DHCPv6: Unkown error during response on %s: %s",
                          binding, str(e))
 
@@ -400,11 +400,11 @@ class VMNetProxy(object):  # pylint: disable=R0902
             ifindex = f.readline().strip()
             try:
                 ifindex = int(ifindex)
-            except ValueError, e:
+            except ValueError as e:
                 logging.warn(" - Failed to get ifindex for %s, cannot parse"
                              " sysfs output '%s'", iface, ifindex)
                 self.remove_tap(iface)
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             logging.warn(" - Error reading %s's ifindex from sysfs: %s",
                          iface, str(e))
             self.remove_tap(iface)
@@ -432,7 +432,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         try:
             addr = f.readline().strip()
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             logging.warn(" - Failed to read hw address for %s from sysfs: %s",
                          iface, str(e))
             self.remove_tap(iface)
@@ -465,7 +465,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                         self.clients[ifindex] = binding
                         client = ifindex
                     logging.debug(" - Added client %s. %s", client, binding)
-        except Exception, e:
+        except Exception as e:
             logging.warn("Error while adding interface from path %s: %s",
                          path, str(e))
 
@@ -502,7 +502,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         # Get the client MAC address
         try:
             resp = pkt.getlayer(BOOTP).copy()
-        except Exception, e:
+        except Exception as e:
             logging.error(" - DHCP: Packet read failed: %s", str(e))
         hlen = resp.hlen
         mac = resp.chaddr[:hlen].encode("hex")
@@ -619,9 +619,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - DHCP: %s for %s", DHCP_TYPES[resp_type], binding)
         try:
             binding.sendp(resp)
-        except socket.error, e:
+        except socket.error as e:
             logging.warn(" - DHCP: Response on %s failed: %s", binding, str(e))
-        except Exception, e:
+        except Exception as e:
             logging.warn(
                 " - DHCP: Unkown error during DHCP response on %s: %s",
                 binding, str(e))
@@ -704,10 +704,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         try:
             binding.sendp(resp)
-        except socket.error, e:
+        except socket.error as e:
             logging.warn(" - RS: RA failed on %s: %s",
                          binding, str(e))
-        except Exception, e:
+        except Exception as e:
             logging.warn(" - RS: Unkown error during RA on %s: %s",
                          binding, str(e))
 
@@ -782,10 +782,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         try:
             binding.sendp(resp)
-        except socket.error, e:
+        except socket.error as e:
             logging.warn(" - NS: NA on %s failed: %s",
                          binding, str(e))
-        except Exception, e:
+        except Exception as e:
             logging.warn(" - NS: Unkown error during NA to %s: %s",
                          binding, str(e))
 
@@ -828,10 +828,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
             try:
                 binding.sendp(resp)
-            except socket.error, e:
+            except socket.error as e:
                 logging.warn(" - RA: Failed on %s: %s",
                              binding, str(e))
-            except Exception, e:
+            except Exception as e:
                 logging.warn(" - RA: Unkown error on %s: %s", binding, str(e))
             i += 1
         logging.info(" - RA: Sent %d RAs in %.2f seconds", i,
@@ -867,7 +867,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
             try:
                 rlist, _, xlist = select.select(self.nfq.keys() + [iwfd],
                                                 [], [], timeout)
-            except select.error, e:
+            except select.error as e:
                 if e[0] == errno.EINTR:
                     logging.debug("select() got interrupted")
                     continue
@@ -892,9 +892,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
                         cnt = q.process_pending(num)
                         logging.debug(" * Processed %d requests on NFQUEUE"
                                       " with fd %d", cnt, fd)
-                    except RuntimeError, e:
+                    except RuntimeError as e:
                         logging.warn("Error processing fd %d: %s", fd, str(e))
-                    except Exception, e:
+                    except Exception as e:
                         logging.warn("Unknown error processing fd %d: %s",
                                      fd, str(e))
 

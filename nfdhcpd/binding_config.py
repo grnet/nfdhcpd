@@ -29,7 +29,7 @@ class Subnet(object):
         if isinstance(net, str):
             try:
                 self.net = IPy.IP(net)
-            except ValueError, e:
+            except ValueError as e:
                 logging.warning(" - IPy error: %s", e)
                 raise e
         else:
@@ -130,7 +130,7 @@ class BindingConfig(object):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)
             s.bind((self.tap, ETH_P_ALL))
             self.socket = s
-        except socket.error, e:
+        except socket.error as e:
             logging.warning(" - Cannot open socket %s", e)
 
     def sendp(self, data):
@@ -142,7 +142,7 @@ class BindingConfig(object):
 
         try:
             count = self.socket.send(data, socket.MSG_DONTWAIT)
-        except socket.error, e:
+        except socket.error as e:
             logging.warn(" - Send with MSG_DONTWAIT failed: %s", str(e))
             self.socket.close()
             self.open_socket()
@@ -171,7 +171,7 @@ class BindingConfig(object):
         logging.info("Parsing binding file %s", path)
         try:
             iffile = open(path, 'r')
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             logging.warn(" - Unable to open binding file %s: %s", path, str(e))
             return None
 
