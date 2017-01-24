@@ -50,7 +50,6 @@ import capng
 import configobj
 import validate
 
-
 from nfdhcpd.vm_net_proxy import VMNetProxy
 
 DEFAULT_CONFIG = "/etc/nfdhcpd/nfdhcpd.conf"
@@ -88,28 +87,31 @@ domains = force_list(default=None)
 """
 
 
-def main():
-    validator = validate.Validator()
+def is_ip_list(value, family=4):
+    """Validation function for IP & IPv6 lists"""
+    try:
+        family = int(family)
+    except ValueError:
+        raise validate.VdtParamError("family", family)
+    if isinstance(value, (str, unicode)):
+        value = [value]
+    if not isinstance(value, list):
+        raise validate.VdtTypeError(value)
 
-    def is_ip_list(value, family=4):
+    for entry in value:
         try:
-            family = int(family)
+            ip = IPy.IP(entry)
         except ValueError:
-            raise validate.VdtParamError(family)
-        if isinstance(value, (str, unicode)):
-            value = [value]
-        if not isinstance(value, list):
-            raise validate.VdtTypeError(value)
+            raise validate.VdtValueError(entry)
 
-        for entry in value:
-            try:
-                ip = IPy.IP(entry)
-            except ValueError:
-                raise validate.VdtValueError(entry)
+        if ip.version() != family:
+            raise validate.VdtValueError(entry)
+    return value
 
-            if ip.version() != family:
-                raise validate.VdtValueError(entry)
-        return value
+
+def main():
+    """Main nfdhcpd entry point"""
+    validator = validate.Validator()
 
     validator.functions["ip_addr_list"] = is_ip_list
     config_spec = cStringIO.StringIO(CONFIG_SPEC)
