@@ -15,6 +15,8 @@
 #    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+"""module hosting the VMNetProxy class"""
+
 import os
 import logging
 import glob
@@ -83,6 +85,9 @@ DHCP_REQRESP = {
 
 
 def ipv62mac(ipv6):
+    """Given an IPv6 EUI-64 address it returns the corresponding MAC address
+
+    """
     # remove subnet info if given
     subnet_index = ipv6.find("/")
     if subnet_index != -1:
@@ -105,6 +110,10 @@ def ipv62mac(ipv6):
 
 
 def get_indev(payload):
+    """ Returns the physical (if available) interface this packet was received
+    through
+
+    """
     try:
         indev_ifindex = payload.get_physindev()
         if indev_ifindex:
@@ -124,6 +133,9 @@ def get_indev(payload):
 
 
 class ClientFileHandler(pyinotify.ProcessEvent):
+    """ Inotify event handler for binding config client files
+
+    """
     def __init__(self, server):
         pyinotify.ProcessEvent.__init__(self)
         self.server = server
@@ -155,6 +167,10 @@ class ClientFileHandler(pyinotify.ProcessEvent):
 
 
 class VMNetProxy(object):  # pylint: disable=R0902
+    """Proxy server that serves DHCP & DHCPv6 requests and sends periodic RA
+    packages.
+
+    """
     def __init__(self, data_path, dhcp_queue_num=None,  # pylint: disable=R0913
                  rs_queue_num=None, ns_queue_num=None, dhcpv6_queue_num=None,
                  dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
@@ -228,6 +244,10 @@ class VMNetProxy(object):  # pylint: disable=R0902
             self.dhcpv6 = True
 
     def get_binding(self, ifindex, mac):
+        """ Returns the binding configuration for a given MAC address or
+        interface index.
+
+        """
         try:
             if self.mac_indexed_clients:
                 logging.debug(" - Binding: Getting binding for mac %s", mac)
@@ -245,7 +265,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
             return None
 
     def dhcpv6_response(self, arg1, arg2=None):  # pylint: disable=W0613
+        """ Generates and sends a reply to a DHCPv6 request
 
+        """
         logging.info(" * DHCPv6: Processing pending request")
         # Workaround for supporting both squeezy's nfqueue-bindings-python
         # and wheezy's python-nfqueue because for some reason the function's
@@ -356,6 +378,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.info(" - Cleanup finished")
 
     def _setup_nfqueue(self, queue_num, family, callback, pending):
+        """ Sets a callback function on an netfilter queue
+
+        """
         logging.info("Setting up NFQUEUE for queue %d, AF %s",
                      queue_num, family)
         q = nfqueue.queue()
@@ -368,7 +393,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         logging.debug(" - Successfully set up NFQUEUE %d", queue_num)
 
     def build_config(self):
-        """load config files of all clients"""
+        """ Loads config files of all clients"""
         self.clients.clear()
 
         for path in glob.glob(os.path.join(self.data_path, "*")):
@@ -627,7 +652,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                 binding, str(e))
 
     def rs_response(self, arg1, arg2=None):  # pylint: disable=W0613
-        """ Generate a reply to an ICMPv6 router solicitation
+        """ Generates a reply to an ICMPv6 router solicitation
 
         """
         logging.info(" * RS: Processing pending request")
@@ -790,11 +815,18 @@ class VMNetProxy(object):  # pylint: disable=R0902
                          binding, str(e))
 
     def send_periodic_ra(self):
+        """ Creates a thread that will send Router Advertisement packages to all
+        clients
+
+        """
         # Use a separate thread as this may take a _long_ time with
         # many interfaces and we want to be responsive in the mean time
         threading.Thread(target=self._send_periodic_ra).start()
 
     def _send_periodic_ra(self):
+        """ Sends Router Advertisement packages to all clients
+
+        """
         logging.info(" * Periodic RA: Starting...")
         start = time.time()
         i = 0
@@ -908,6 +940,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
                     timeout = self.ra_period - (time.time() - start)
 
     def print_clients(self):
+        """ Prints the registered clients
+
+        """
         logging.info("%10s   %20s %20s %10s %20s %40s",
                      'Key', 'Client', 'MAC', 'TAP', 'IP', 'IPv6')
         for k, cl in self.clients.items():

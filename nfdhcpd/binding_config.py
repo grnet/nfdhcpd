@@ -15,6 +15,8 @@
 #    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+"""Module for manipulating nfdhcpd client binding configurations"""
+
 import os
 import logging
 import socket
@@ -25,6 +27,9 @@ from scapy.packet import BasePacket
 
 
 class Subnet(object):
+    """ Represents an IP subnet
+
+    """
     def __init__(self, net=None, gw=None, dev=None):
         if isinstance(net, str):
             try:
@@ -97,6 +102,9 @@ class Subnet(object):
 
 
 class BindingConfig(object):
+    """ Represents a binding configuration of an nfdhcpd client
+
+    """
     def __init__(self, tap=None, indev=None,
                  mac=None, ip=None, hostname=None,
                  subnet=None, gateway=None,
@@ -120,9 +128,15 @@ class BindingConfig(object):
         self.private = private
 
     def is_valid(self):
+        """ Returns True if this binding configuration is valid
+
+        """
         return self.mac is not None and self.hostname is not None
 
     def open_socket(self):
+        """ Opens a socket for communicating with the client
+
+        """
 
         logging.debug(" - Opening L2 socket and binding to %s", self.tap)
         try:
@@ -134,7 +148,9 @@ class BindingConfig(object):
             logging.warning(" - Cannot open socket %s", e)
 
     def sendp(self, data):
+        """ Sends data to the client this binding refers to
 
+        """
         if isinstance(data, BasePacket):
             data = str(data)
 
@@ -165,7 +181,7 @@ class BindingConfig(object):
 
     @staticmethod
     def load(path):
-        """ Read a configuration binding file
+        """ Reads a configuration binding file
 
         """
         logging.info("Parsing binding file %s", path)
@@ -176,6 +192,9 @@ class BindingConfig(object):
             return None
 
         def get_value(line):
+            """ Splits a key=value line and return the value string.
+
+            """
             v = line.strip().split('=')[1]
             if v == '':
                 return None

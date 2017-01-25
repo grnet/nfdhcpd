@@ -264,6 +264,9 @@ def main():
     logging.info("Ready to serve requests")
 
     def debug_handler(signum, _):
+        """ Signal handler that will print the state of the server
+
+        """
         logging.debug('Received signal %d. Printing proxy state...', signum)
         proxy.print_clients()
 
