@@ -1,0 +1,3 @@
+var/log/nfdhcpd
+var/lib/nfdhcpd
+usr/lib/nfdhcpd

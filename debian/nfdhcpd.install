@@ -1,0 +1,5 @@
+scripts/analyze_pcap usr/bin
+
+nfdhcpd.conf etc/nfdhcpd/
+contrib/ferm/nfdhcpd.ferm etc/ferm/
+contrib/logrotate/nfdhcpd etc/logrotate.d

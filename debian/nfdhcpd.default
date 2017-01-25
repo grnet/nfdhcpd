@@ -1,0 +1,15 @@
+# Defaults for nfdhcpd initscript
+# sourced by /etc/init.d/nfdhcpd
+# installed at /etc/default/nfdhcpd by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+RUN="yes"
+
+# Additional options that are passed to the Daemon.
+DAEMON_OPTS=""
+
+# variables for scripts
+NFDHCPD_STATE_DIR=/var/lib/nfdhcpd
