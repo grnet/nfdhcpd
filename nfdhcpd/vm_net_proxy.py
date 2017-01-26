@@ -845,10 +845,15 @@ class VMNetProxy(object):  # pylint: disable=R0902
             ifll = subnet.make_ll64(indevmac)
             if ifll is None:
                 continue
+
+            # Enable Other Configuration Flag only when the DHCPv6 functionality
+            # is enabled
+            other_config = 1 if self.dhcpv6 else 0
+
             resp = \
                 (Ether(src=indevmac) /
                  IPv6(src=str(ifll)) /
-                 ICMPv6ND_RA(O=1, routerlifetime=14400) /
+                 ICMPv6ND_RA(O=other_config, routerlifetime=14400) /
                  ICMPv6NDOptPrefixInfo(prefix=subnet.gw or str(subnet.prefix),
                                        prefixlen=subnet.prefixlen,
                                        R=1 if subnet.gw else 0))
