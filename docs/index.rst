@@ -125,13 +125,14 @@ Specifically:
 | If not given the instance's name (hostname) will be used instead.
 
 In the ipv6 section we define the options related to IPv6 responses.  Currently
-nfdhcpd supports IPv6 stateless configuration [3]. The instance will get an
-auto-generated IPv6 (MAC to eui64) based on the IPv6 prefix exported by Router
-Advertisements (O flag set, M flag unset). This kind of RA will make instance
+nfdhcpd supports IPv6 stateless configuration [3] with or without DHCPv6. The
+instance will get an auto-generated IPv6 (MAC to eui64) based on the IPv6
+prefix exported by Router Advertisements (M flag unset). If the O flag is set
+(`nfdhcpd` is running in `SLAAC+DHCPv6` mode) the RA will make the instance
 query for nameservers and domain search list via DHCPv6 request.
-nfdhcpd, currently and in case of IPv6, is supposed to work on a routed setup
-where the instances are not on the same collision domain with the external
-router and thus any RA/NA should be served locally. Specifically:
+nfdhcpd, currently and in case of IPv6, is supposed to work on
+a routed setup where the instances are not on the same collision domain with
+the external router and thus any RA/NA should be served locally. Specifically:
 
 * ``enable_ipv6`` to globally enable/disable IPv6 responses
 
@@ -143,10 +144,22 @@ router and thus any RA/NA should be served locally. Specifically:
 
 * ``dhcpv6_queue`` the NFQUEUE number to listen on for DHCPv6 request
 
+* ``mode`` to determine whether SLAAC or SLAAC+DHCPv6 is used
+
+| This option may have the values: `slaac`, `slaac+dhcpv6` or `auto`, where the
+| default one is `auto`. Right now Stateful DHCPv6 is not supported. If the
+| value is `auto`, nfdhcpd will examine the provided NFQUEUE numbers to
+| determine the running mode. If all three queues (rs, ns and dhcpv6) are
+| provided, the running mode will be `slaac+dhcpv6`. If only the router
+| solicitation and neighbor solicitation queues are provided, the running mode
+| will be `slaac`.
+
 * ``nameservers`` the IPv6 nameservers
 
-| They can be send using the RDNSS option of the RA [4].
-| Since it is not supported by Windows we serve them via DHCPv6 responses
+| They can be send using the RDNSS option of the RA [4] (if the mode is SLAAC)
+| or serve them via DHCPv6 presponses (if the mode is SLAAC+DHCPv6). RDNNS is
+| not supported by Windows. If you want to have full Windows support, the
+| running mode must be SLAAC+DHCPv6.
 
 * ``domains`` the domain search list
 

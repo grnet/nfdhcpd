@@ -79,7 +79,7 @@ domain = example.com
 ## IPv6-related functionality
 [ipv6]
 enable_ipv6 = yes
-enable_dhcpv6 = yes
+mode = auto
 ra_period = 300 # seconds
 rs_queue = 43 # NFQUEUE number to listen on for router solicitations
 ns_queue = 44 # NFQUEUE number to listen on for neighbor solicitations

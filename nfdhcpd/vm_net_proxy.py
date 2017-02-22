@@ -173,7 +173,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
     """
     def __init__(self, data_path, dhcp_queue_num=None,  # pylint: disable=R0913
                  rs_queue_num=None, ns_queue_num=None, dhcpv6_queue_num=None,
-                 dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
+                 ipv6_mode=None, dhcp_lease_lifetime=DEFAULT_LEASE_LIFETIME,
                  dhcp_lease_renewal=DEFAULT_LEASE_RENEWAL,
                  dhcp_domain=None, dhcp_server_on_link=False,
                  dhcp_server_ip=DHCP_DUMMY_SERVER_IP, dhcp_nameservers=None,
@@ -192,23 +192,13 @@ class VMNetProxy(object):  # pylint: disable=R0902
         self.dhcp_server_ip = dhcp_server_ip
         self.dhcp_server_on_link = dhcp_server_on_link
         self.ra_period = ra_period
-        if dhcp_nameservers is None:
-            self.dhcp_nameserver = []
-        else:
-            self.dhcp_nameservers = dhcp_nameservers
+        self.dhcp_nameservers = dhcp_nameservers or []
+        self.ipv6_nameservers = ipv6_nameservers or []
+        self.dhcpv6_domains = dhcpv6_domains or []
 
-        if ipv6_nameservers is None:
-            self.ipv6_nameservers = []
-        else:
-            self.ipv6_nameservers = ipv6_nameservers
-
-        if dhcpv6_domains is None:
-            self.dhcpv6_domains = []
-        else:
-            self.dhcpv6_domains = dhcpv6_domains
-
-        self.ipv6_enabled = False
-        self.dhcpv6 = False
+        # TODO: implement stateful dhcpv6 mode
+        assert ipv6_mode in (None, 'slaac', 'slaac+dhcpv6')
+        self.ipv6_mode = ipv6_mode
 
         self.clients = {}
         # self.subnets = {}
@@ -229,19 +219,16 @@ class VMNetProxy(object):  # pylint: disable=R0902
         if dhcp_queue_num is not None:
             self._setup_nfqueue(dhcp_queue_num, AF_INET, self.dhcp_response, 0)
 
-        if rs_queue_num is not None:
+        if self.ipv6_mode:
+            assert rs_queue_num is not None
+            assert ns_queue_num is not None
             self._setup_nfqueue(rs_queue_num, AF_INET6, self.rs_response, 10)
-            self.ipv6_enabled = True
-
-        if ns_queue_num is not None:
             self._setup_nfqueue(ns_queue_num, AF_INET6, self.ns_response, 10)
-            self.ipv6_enabled = True
 
-        if dhcpv6_queue_num is not None:
+        if self.ipv6_mode == 'slaac+dhcpv6':
+            assert dhcpv6_queue_num is not None
             self._setup_nfqueue(dhcpv6_queue_num, AF_INET6,
                                 self.dhcpv6_response, 10)
-            self.ipv6_enabled = True
-            self.dhcpv6 = True
 
     def get_binding(self, ifindex, mac):
         """ Returns the binding configuration for a given MAC address or
@@ -710,7 +697,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
 
         # Enable Other Configuration Flag only when the DHCPv6 functionality is
         # enabled
-        other_config = 1 if self.dhcpv6 else 0
+        other_config = 1 if self.ipv6_mode == 'slaac+dhcpv6' else 0
 
         resp = (Ether(src=indevmac) /
                 IPv6(src=str(ifll)) /
@@ -846,9 +833,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
             if ifll is None:
                 continue
 
-            # Enable Other Configuration Flag only when the DHCPv6 functionality
-            # is enabled
-            other_config = 1 if self.dhcpv6 else 0
+            # Enable Other Configuration Flag only when the DHCPv6
+            # functionality is enabled
+            other_config = 1 if self.ipv6_mode == 'slaac+dhcpv6' else 0
 
             resp = \
                 (Ether(src=indevmac) /
@@ -894,7 +881,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
         iwfd = self.notifier._fd  # pylint: disable=W0212
 
         start = time.time()
-        if self.ipv6_enabled:
+        if self.ipv6_mode:
             timeout = self.ra_period
             self.send_periodic_ra()
         else:
@@ -935,7 +922,7 @@ class VMNetProxy(object):  # pylint: disable=R0902
                         logging.warn("Unknown error processing fd %d: %s",
                                      fd, str(e))
 
-            if self.ipv6_enabled:
+            if self.ipv6_mode:
                 # Calculate the new timeout
                 timeout = self.ra_period - (time.time() - start)
 
