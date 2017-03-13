@@ -77,10 +77,10 @@ domain = string(default=None)
 
 [ipv6]
 enable_ipv6 = boolean(default=True)
-enable_dhcpv6 = boolean(default=False)
-ra_period = integer(min=1, max=4294967295)
-rs_queue = integer(min=0, max=65535)
-ns_queue = integer(min=0, max=65535)
+mode = option('auto', 'slaac', 'dhcpv6', 'slaac+dhcpv6', default='auto')
+ra_period = integer(min=1, max=4294967295, default=600)
+rs_queue = integer(min=0, max=65535, default=None)
+ns_queue = integer(min=0, max=65535, default=None)
 dhcp_queue = integer(min=0, max=65535, default=None)
 dhcpv6_queue = integer(min=0, max=65535, default=None)
 nameservers = ip_addr_list(family=6)
@@ -242,21 +242,75 @@ def main():
         })
 
     if config["ipv6"].as_bool("enable_ipv6"):
-        proxy_opts.update({
-            "rs_queue_num": config["ipv6"].as_int("rs_queue"),
-            "ns_queue_num": config["ipv6"].as_int("ns_queue"),
-            "ra_period": config["ipv6"].as_int("ra_period"),
-            "ipv6_nameservers": config["ipv6"]["nameservers"],
-            "dhcpv6_domains": config["ipv6"]["domains"],
-        })
 
-    if config["ipv6"].as_bool("enable_ipv6") and \
-            config["ipv6"].as_bool("enable_dhcpv6"):
-        try:
-            transition_dhcpv6_queue = config["ipv6"].as_int("dhcpv6_queue")
-        except:
-            transition_dhcpv6_queue = config["ipv6"].as_int("dhcp_queue")
-        proxy_opts.update({"dhcpv6_queue_num": transition_dhcpv6_queue})
+        if config['ipv6']['dhcp_queue']:
+            logging.warning('dhcp_queue option in ipv6 is deprecated in favor '
+                            'of dhcpv6_queue and may be removed in the future.'
+                            ' Please update your configuration')
+
+        mode = config['ipv6']['mode']
+        queues = {
+            'rs': config['ipv6']['rs_queue'],
+            'ns': config['ipv6']['ns_queue'],
+            'dhcpv6': (config['ipv6']['dhcpv6_queue'] or
+                       config['ipv6']['dhcp_queue'])}
+
+        # The queue requirements of each IPv6 mode
+        needed_queues = {
+            'slaac+dhcpv6': ('rs', 'ns', 'dhcpv6'),
+            'slaac': ('rs', 'ns'),
+            'dhcpv6': ('dhcpv6',)}
+
+        # Compute the missing queues info for each mode
+        missing_queues = {}
+        for m in needed_queues.keys():
+            missing_queues[m] = []
+            for q in needed_queues[m]:
+                if not queues[q]:
+                    missing_queues[m].append(q)
+
+        # If mode is set to auto, we need to autodetect it according to the
+        # defined queues
+        if mode == 'auto':
+            detected_mode = None
+            logging.info("IPv6 mode set to auto. Detecting suitable mode")
+
+            # The order we check for the suitable modes matters.
+            for current in 'slaac+dhcpv6', 'slaac', 'dhcpv6':
+                if not len(missing_queues[current]):
+                    detected_mode = current
+                    break
+
+            if not detected_mode:
+                logging.critical(
+                    "Unable to detect a suitable IPv6 mode. Reason: "
+                    "{rs,ns,dhcpv6}_queue parameters are not properly set.")
+                sys.exit(2)
+
+            logging.info("IPv6 detected mode: %s", detected_mode)
+            mode = detected_mode
+
+        elif missing_queues[mode]:  # mode is set by the user
+            logging.critical(
+                "parameters: %s are needed in ipv6 section to run in %s mode "
+                "but not set!",
+                ",".join(["%s_queue" % q for q in missing_queues[mode]]), mode)
+            sys.exit(3)
+
+        # TODO: stateful dhcpv6 is not implemented yet
+        if mode == 'dhcpv6':
+            logging.critical("Mode: dhcpv6 is not implemented yet! Quitting!")
+            sys.exit(4)
+
+        proxy_opts.update(
+            {"ra_period": config["ipv6"].as_int("ra_period"),
+             "ipv6_nameservers": config["ipv6"]["nameservers"],
+             "dhcpv6_domains": config["ipv6"]["domains"],
+             "ipv6_mode": mode,
+             "rs_queue_num": int(queues['rs']) if queues['rs'] else None,
+             "ns_queue_num": int(queues['ns']) if queues['ns'] else None,
+             "dhcpv6_queue_num":
+                 int(queues['dhcpv6']) if queues['dhcpv6'] else None})
 
     # pylint: disable=star-args
     proxy = VMNetProxy(data_path=config["general"]["datapath"], **proxy_opts)

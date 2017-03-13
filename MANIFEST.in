@@ -1,4 +1,4 @@
-include README.md CHANGELOG CONTRIBUTORS COPYING nfdhcpd.conf
+include README.md CHANGELOG AUTHORS COPYING nfdhcpd.conf
 recursive-include scripts *
 recursive-include contrib *
 recursive-include docs *
