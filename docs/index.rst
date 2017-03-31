@@ -199,7 +199,7 @@ send SIGUSR1 and see the list in the logfile:
  # kill -SIGUSR1 $(cat /var/run/nfdhcpd/nfdhpcd.pid) && tail -n 100 /var/log/nfdhcpd/nfdhpcd.log
 
 
-| [1] https://www.wzdftpd.net/redmine/projects/nfqueue-bindings/wiki/
-| [2] http://docs.ganeti.org/ganeti/2.14/html/man-gnt-network.html
+| [1] https://github.com/chifflier/nfqueue-bindings/
+| [2] http://docs.ganeti.org/ganeti/current/html/man-gnt-network.html
 | [3] https://tools.ietf.org/html/rfc4862
 | [4] https://tools.ietf.org/html/rfc5006
