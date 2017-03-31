@@ -168,10 +168,11 @@ the external router and thus any RA/NA should be served locally. Specifically:
 iptables
 --------
 
-In order nfdhcpd to be able to process incoming requests you have to mangle
-the corresponding packages. Please note that in case of bridged setup the
-kernel understands that the packets are coming from the bridge (logical indev)
-and not from the tap (physical indev). Specifically:
+In order for nfdhcpd to be able to process incoming requests you have to mangle
+the corresponding packets on the proper interface. Please note that in case of
+a bridged setup you need to tell iptables to specifically match the packets 
+coming from the tap (physical indev) and not the bridge (logical indev).
+Specifically:
 
 * **DHCP**: ``iptables -t mangle -A PREROUTING -p udp -m physdev --physdev-in tap+ -m udp --dport 67 -j NFQUEUE --queue-num 42``
 
@@ -181,10 +182,9 @@ and not from the tap (physical indev). Specifically:
 
 * **DHCPv6**: ``ip6tables -t mangle -A PREROUTING -i tap+ -p udp --dport 547 -j NFQUEUE --queue-num 45``
 
-For a bridged setup replace tap+ with br+ in case of DHCP. Using nfdhcpd
-for IPv6 in a bridged setup does not make any sense. The above rules are
-included in `/etc/ferm/nfdhcpd.ferm` .
-In case you use ferm, this file should be included in `/etc/ferm/ferm.conf`.
+Using nfdhcpd for IPv6 in a bridged setup does not make any sense.
+The above example rules are placed by the package in `/etc/ferm/nfdhcpd.ferm`.
+In case you use ferm, this file should be included by `/etc/ferm/ferm.conf`.
 Otherwise an `rc.local` script can be used to issue those rules upon boot.
 
 
