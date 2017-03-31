@@ -6,11 +6,16 @@
 Welcome to nfdhcpd's documentation!
 ===================================
 
-nfdhcpd is a userspace server written in python and based on NFQUEUE [1].  The
+nfdhcpd is a userspace server written in python and based on NFQUEUE [1]. The
 administrator can enable processing of DHCP, NS, RS, DHCPv6 requests on
 individual TAP interfaces by injecting nfdhcpd in the processing pipeline for
-IP packets dynamically (by mangling the corresponding packet types and redirect
+IP packets dynamically (by mangling the corresponding packet types and redirecting
 them to the appropriate nfqueue).
+
+nfdhcpd is mainly targeted to be used in a routed setup [2], where the
+instances are not on the same collision domain with the external router,
+but that does not mean it can't be used on bridged setup, even though one
+might consider it a bit redundant.
 
 The daemon runs on the host and is controlled by manipulating files under its
 state directory. Creation of a new file under this directory ("binding file")
@@ -53,7 +58,7 @@ watch its state directory, `/var/lib/nfdhcpd` via inotify().
 b) A new VM gets created, let's assume its NIC has address mac0, lives on TAP
 interface tap0, and is to receive IP address ip0 via DHCP.
 
-c) Someone (e.g., a Ganeti KVM ifup script, or in our case gnt-network [2]
+c) Someone (e.g., a Ganeti KVM ifup script, or in our case gnt-network [3]
 creates a new binding file informing nfdhcpd that it is to reply to DHCP
 requests from MAC mac0 on TAP interface tap0, and include IP ip0 in the DHCP
 reply.
@@ -125,14 +130,15 @@ Specifically:
 | If not given the instance's name (hostname) will be used instead.
 
 In the ipv6 section we define the options related to IPv6 responses.  Currently
-nfdhcpd supports IPv6 stateless configuration [3] with or without DHCPv6. The
+nfdhcpd supports IPv6 stateless configuration [4] with or without DHCPv6. The
 instance will get an auto-generated IPv6 (MAC to eui64) based on the IPv6
 prefix exported by Router Advertisements (M flag unset). If the O flag is set
 (`nfdhcpd` is running in `SLAAC+DHCPv6` mode) the RA will make the instance
 query for nameservers and domain search list via DHCPv6 request.
-nfdhcpd, currently and in case of IPv6, is supposed to work on
-a routed setup where the instances are not on the same collision domain with
-the external router and thus any RA/NA should be served locally. Specifically:
+As previously said, nfdhcpd, currently and in case of IPv6, is supposed to work
+on a routed setup thus any RA/NA requests should be served locally by the host.
+
+Specifically:
 
 * ``enable_ipv6`` to globally enable/disable IPv6 responses
 
@@ -156,7 +162,7 @@ the external router and thus any RA/NA should be served locally. Specifically:
 
 * ``nameservers`` the IPv6 nameservers
 
-| They can be send using the RDNSS option of the RA [4] (if the mode is SLAAC)
+| They can be send using the RDNSS option of the RA [5] (if the mode is SLAAC)
 | or serve them via DHCPv6 presponses (if the mode is SLAAC+DHCPv6). RDNNS is
 | not supported by Windows. If you want to have full Windows support, the
 | running mode must be SLAAC+DHCPv6.
@@ -170,7 +176,7 @@ iptables
 
 In order for nfdhcpd to be able to process incoming requests you have to mangle
 the corresponding packets on the proper interface. Please note that in case of
-a bridged setup you need to tell iptables to specifically match the packets 
+a bridged setup you need to tell iptables to specifically match the packets
 coming from the tap (physical indev) and not the bridge (logical indev).
 Specifically:
 
@@ -182,7 +188,6 @@ Specifically:
 
 * **DHCPv6**: ``ip6tables -t mangle -A PREROUTING -i tap+ -p udp --dport 547 -j NFQUEUE --queue-num 45``
 
-Using nfdhcpd for IPv6 in a bridged setup does not make any sense.
 The above example rules are placed by the package in `/etc/ferm/nfdhcpd.ferm`.
 In case you use ferm, this file should be included by `/etc/ferm/ferm.conf`.
 Otherwise an `rc.local` script can be used to issue those rules upon boot.
@@ -200,6 +205,7 @@ send SIGUSR1 and see the list in the logfile:
 
 
 | [1] https://github.com/chifflier/nfqueue-bindings/
-| [2] http://docs.ganeti.org/ganeti/current/html/man-gnt-network.html
-| [3] https://tools.ietf.org/html/rfc4862
-| [4] https://tools.ietf.org/html/rfc5006
+| [2] https://wiki.xen.org/wiki/Vif-route
+| [3] http://docs.ganeti.org/ganeti/current/html/man-gnt-network.html
+| [4] https://tools.ietf.org/html/rfc4862
+| [5] https://tools.ietf.org/html/rfc5006
