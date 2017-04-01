@@ -16,7 +16,7 @@ mangling the corresponding packet types and redirecting them to the appropriate
 nfqueue).
 
 nfdhcpd is mainly targeted to be used in a routed setup [2], where the
-instances are not on the same collision domain with the external router,
+instances are not on the same broadcast domain with the external router,
 but that does not mean it can't be used on bridged setup, even though one
 might consider it a bit redundant.
 
