@@ -104,17 +104,20 @@ from, and defines at least the following variables:
 
 * ``EUI64``: The IPv6 address of the instance
 
-
 nfdhcpd.conf
 ------------
 
-The configuration file for nfdhcp is `/etc/nfdhpcd/nfdhcpd.conf`. Three
+The configuration file for nfdhcp is */etc/nfdhpcd/nfdhcpd.conf*. Three
 sections are defined: general, dhcp, ipv6.
 
-Note that nfdhcpd can run as user `nobody`. This and other options related
-to it's execution environment can be defined in section `general`.
+general section
+^^^^^^^^^^^^^^^
+nfdhcpd can run as ``user`` nobody. This and other options (pidfile, logdir, etc)
+related to it's execution environment can be defined in section *general*.
 
-In the `dhcp` section one defines the options related to DHCP replies.
+dhcp section
+^^^^^^^^^^^^
+In the *dhcp* section one defines the options related to DHCP replies.
 Specifically:
 
 * ``enable_dhcp`` to globally enable/disable DHCP
@@ -131,12 +134,15 @@ Specifically:
 
 | If not given the instance's name (hostname) will be used instead.
 
-In the `ipv6` section we define the options related to IPv6 responses.  Currently
+
+ipv6 section
+^^^^^^^^^^^^
+In the *ipv6* section one defines the options related to IPv6 behavior. Currently
 nfdhcpd supports IPv6 stateless configuration [4] with or without DHCPv6. The
-instance will get an auto-generated IPv6 (MAC to `EUI64`) based on the IPv6
-prefix exported by Router Advertisements (`M flag` unset). If the `O flag` is set
-(`nfdhcpd` is running in `SLAAC+DHCPv6` mode) the RA will make the instance
-query for nameservers and domain search list via DHCPv6 request.
+instance will get an auto-generated IPv6 (MAC to EUI64) based on the IPv6
+prefix exported by Router Advertisements (*M flag* unset). If the *O flag* is set
+(nfdhcpd is running in *slaac+dhcpv6* ``mode``) the RA advises the instance to
+query for nameservers and domain search list via a DHCPv6 request.
 As previously said, nfdhcpd, currently and in case of IPv6, is supposed to work
 on a routed setup thus any RA/NA requests should be served locally by the host.
 
@@ -154,20 +160,20 @@ Specifically:
 
 * ``mode`` to determine whether SLAAC or SLAAC+DHCPv6 is used
 
-| This option may take one of the values: `slaac`, `slaac+dhcpv6` or `auto`, where the
-| default one is `auto`. Right now Stateful DHCPv6 is not supported. If the
-| value is `auto`, nfdhcpd will examine the provided NFQUEUE numbers to
+| This option may take one of the values: *slaac*, *slaac+dhcpv6* or *auto*, where the
+| default one is *auto*. Right now Stateful DHCPv6 is not supported. If the
+| value is *auto*, nfdhcpd will examine the provided NFQUEUE numbers to
 | determine the running mode. If all three queues ({rs,ns,dhcpv6}_queue) are
-| provided, the running mode will be `slaac+dhcpv6`. If only the router
-| solicitation and neighbor solicitation queues are provided, then the running mode
-| will be `slaac`.
+| provided, the running mode will be *slaac+dhcpv6*. If only the router
+| solicitation and neighbor solicitation queues are provided, then the running ``mode``
+| will be *slaac*.
 
 * ``nameservers`` the IPv6 nameservers
 
-| They can be sent using the RDNSS option of the RA [5] (if the `mode` is 
-| set to `slaac`)  or serve them via DHCPv6 replies (if the `mode` is `slaac+dhcpv6`).
-| RDNSS [6] is not supported by Windows. If you want to have full Windows support, the
-| `mode` must be set to `slaac+dhcpv6`.
+| They can be sent using the RDNSS option of the RA [5] if the ``mode`` is
+| set to *slaac* or served via DHCPv6 replies if the ``mode`` is set to *slaac+dhcpv6*.
+| RDNSS [6] is not supported by Windows, so if you want to have full Windows support,
+| ``mode`` must be set to *slaac+dhcpv6*.
 
 * ``domains`` the domain search list
 
