@@ -16,7 +16,7 @@ by injecting nfdhcpd in the processing pipeline for IP packets dynamically. This
 done by mangling the relevant packets on those interfaces using iptables and
 redirecting them to NFQUEUE target using the appropriate queue number.
 
-`nfdhcpd` is mainly targeted to be used in a routed setup [2], where the
+`nfdhcpd` is mainly targeted to be used in a [routed setup](https://wiki.xen.org/wiki/Vif-route) where the
 instances are not on the same broadcast domain with the external router,
 but that does not mean it can't be used on bridged setup, even though one
 might consider it a bit redundant.
