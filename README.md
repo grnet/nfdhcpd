@@ -6,23 +6,30 @@ virtual machine hosting
 
 Overview
 --------
+`nfdhcpd` is a userspace daemon written in python and based on
+[NFQUEUE](https://github.com/chifflier/nfqueue-bindings/) meant
+to process DHCP, IPv6 Neighbor Solicitations (NS), IPv6 Router Solicitations (RS)
+and DHCPv6 requests. The daemon should run on the hosts of virtualization environments
+in order to directly reply to VMs' requests without these leaving the hosts. An
+administrator can enable processing of those requests on individual TAP interfaces
+by injecting nfdhcpd in the processing pipeline for IP packets dynamically. This is
+done by mangling the relevant packets on those interfaces using iptables and
+redirecting them to NFQUEUE target using the appropriate queue number.
 
-`nfdhcpd` is a userspace server written in python and based on
-[NFQUEUE](https://www.wzdftpd.net/redmine/projects/nfqueue-bindings/wiki/). An
-administrator can enable processing of DHCP, Neighbor Solicitations, Router
-Solicitations and DHCPv6 requests on individual TAP interfaces by injecting
-nfdhcpd in the processing pipeline for IP packets dynamically (by mangling the
-corresponding packet types and redirect them to the appropriate *nfqueue*).
+`nfdhcpd` is mainly targeted to be used in a routed setup [2], where the
+instances are not on the same broadcast domain with the external router,
+but that does not mean it can't be used on bridged setup, even though one
+might consider it a bit redundant.
+
 `nfdhcpd` periodically sends Router Advertisements to all IPv6 enabled
 interfaces it monitors to enable addressing through SLAAC. DHCPv6 functionality
 is currently limited to supplying Other Configuration data like DNS Recursive
 Name Server and Domain Search List as supplementary to Router Advertisements.
 
-The daemon runs on the host and is controlled by manipulating files under its
-state directory. Creation of a new file under this directory ("binding file")
-instructs the daemon to reply on the requests arriving on the specified TAP
-interface. These files are meant to be created by the software
-managing the instances on the host.
+The daemon is controlled by manipulating files under its state directory.
+Creation of a new file under this directory ("binding file") instructs the daemon
+to reply to the requests arriving on the specified TAP interface. These files are
+meant to be created by the software managing the instances on the host.
 
 `nfdhcpd` is meant to work with [Ganeti](http://code.google.com/p/ganeti) and
 [gnt-networking](https://github.com/grnet/gnt-networking). Instances inside the
@@ -47,6 +54,8 @@ GATEWAY6=2001:db8:aaaa:bbbb::1
 SUBNET6=2001:db8:aaaa:bbbb::/64
 EUI64=2001:db8:aaaa:bbbb:a86b:39ff:fe22:3344
 PRIVATE=
+MTU=
+MACSPOOF=
 ```
 
 Global configuration
@@ -116,7 +125,7 @@ Debian Packages
 ---------------
 
 We provide Debian packages for Debian 7 (wheezy) & 8 (jessie) in our APT
-repository. To use them try:
+repository. To use them:
 
 ```shell
 echo deb http://apt.dev.grnet.gr $(lsb_release -s -c)/ > /etc/apt/sources.list.d/apt.dev.grnet.gr.list
@@ -127,7 +136,7 @@ apt-get install nfdhcpd
 ```
 
 **Warning:** DHCPv6 functionality needs `python-scapy>2.3` and one currently
-needs to get a package from `Debian stretch` or use the patched version found
+needs to either get a package from `Debian stretch` or use the patched version found
 in [apt.dev.grnet.gr](http://apt.dev.grnet.gr/)
 
 Dependencies

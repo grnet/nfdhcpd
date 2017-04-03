@@ -11,9 +11,9 @@ to process DHCP, IPv6 Neighbor Solicitations (NS), IPv6 Router Solicitations (RS
 and DHCPv6 requests. The daemon should run on the hosts of virtualization environments
 in order to directly reply to VMs' requests without these leaving the hosts. An
 administrator can enable processing of those requests on individual TAP interfaces
-by injecting nfdhcpd in the processing pipeline for IP packets dynamically (by
-mangling the corresponding packet types and redirecting them to the appropriate
-nfqueue).
+by injecting nfdhcpd in the processing pipeline for IP packets dynamically. This is
+done by mangling the relevant packets on those interfaces using iptables and
+redirecting them to NFQUEUE target using the appropriate queue number.
 
 nfdhcpd is mainly targeted to be used in a routed setup [2], where the
 instances are not on the same broadcast domain with the external router,
@@ -84,7 +84,7 @@ A binding file in nfdhcpd's state directory is named after the
 physical interface where the daemon is to receive incoming DHCP requests
 from, and defines at least the following variables:
 
-* ``INSTANCE``: The instance name related to this interface
+* ``HOSTNAME``: The instance name related to this interface
 
 * ``INDEV``: The logical interface where the packet is received on. For
   bridged setups, the bridge interface, e.g., br0. Otherwise, same as
@@ -103,6 +103,12 @@ from, and defines at least the following variables:
 * ``GATEWAY6``: The IPv6 network gateway
 
 * ``EUI64``: The IPv6 address of the instance
+
+* ``PRIVATE``: When set stop sending default gateway in DHCP and RA packets
+
+* ``MACSPOOF``: When set disable MAC address spoofing protection
+
+* ``MTU``: When set, send MTU size in DHCP and RA packets
 
 nfdhcpd.conf
 ------------
