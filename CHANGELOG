@@ -1,3 +1,11 @@
+Changes with nfdhcpd 0.16rc1 (13/03/2017)
+
+  * Do major code cleanup
+  * Fix bugs
+  * Replace enable_dhcpv6 with mode. Valid values are 'auto', 'slaac',
+    'slaac+dhcpv6' and 'dhcpv6' for future use
+  * Add support for python-daemon >= 1.6
+
 Changes with nfdhcpd 0.15 (29/11/2016)
 
   * Remove unneeded scripts
