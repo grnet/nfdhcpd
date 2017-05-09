@@ -1,3 +1,10 @@
+nfdhcpd (0.16~rc2-1~jessie) jessie; urgency=medium
+
+  * New upstream version
+  * Remove kvm-vif-bridge conffile for versions prior to 0.12
+
+ -- Nikos Skalkotos <skalkoto@grnet.gr>  Tue, 09 May 2017 12:14:09 +0300
+
 nfdhcpd (0.16~rc1-1~jessie) jessie; urgency=medium
 
   * New upstream version
@@ -244,4 +251,5 @@ nfdhcpd (0.1) unstable; urgency=low
   * Initial Release.
 
  -- Apollon Oikonomopoulos <apollon@noc.grnet.gr>  Mon, 15 Nov 2010 12:42:53 +0200
+
 
