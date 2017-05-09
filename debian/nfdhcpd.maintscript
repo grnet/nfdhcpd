@@ -1,1 +1,1 @@
-rm_conffile /etc/ganeti/kvm-vif-bridge 0.11.9+vima2
+rm_conffile /etc/ganeti/kvm-vif-bridge 0.12
