@@ -1,0 +1,15 @@
+[Unit]
+Description=NFQueue DHCP/RA server
+After=network-online.target local-fs.target remote-fs.target
+Wants=network-online.target
+ConditionPathExists=!/etc/nfdhcpd/nfdhcpd_not_to_be_run
+
+[Service]
+Environment=DAEMON_OPTS=
+EnvironmentFile=-/etc/default/nfdhcpd
+ExecStartPre=/bin/mkdir -p /var/run/nfdhcpd
+ExecStartPre=/bin/chown nobody:nogroup /var/run/nfdhcpd
+ExecStart=/usr/sbin/nfdhcpd $DAEMON_OPTS
+
+[Install]
+WantedBy=multi-user.target
