@@ -324,9 +324,20 @@ def main():
         logging.debug('Received signal %d. Printing proxy state...', signum)
         proxy.print_clients()
 
+    def term_handler(signum, _):
+        """Signal handler for graceful termination
+
+        """
+        logging.info('Received signal %d. Terminating...', signum)
+        sys.exit(0)
+
     # Set the signal handler for debuging clients
     signal.signal(signal.SIGUSR1, debug_handler)
     signal.siginterrupt(signal.SIGUSR1, False)
+
+    # Terminate gracefully upon receiving a SIGTERM, otherwise systemd will set
+    # the service's state to failed after being stopped.
+    signal.signal(signal.SIGTERM, term_handler)
 
     try:
         proxy.serve()
