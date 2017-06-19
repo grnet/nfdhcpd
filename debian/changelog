@@ -1,3 +1,10 @@
+nfdhcpd (0.16~rc3-1~jessie) jessie; urgency=medium
+
+  * New upstream version
+  * Add systemd unit service file
+
+ -- Nikos Skalkotos <skalkoto@grnet.gr>  Mon, 19 Jun 2017 12:25:26 +0300
+
 nfdhcpd (0.16~rc2-2~jessie) jessie; urgency=medium
 
   * New upstream version
@@ -251,5 +258,6 @@ nfdhcpd (0.1) unstable; urgency=low
   * Initial Release.
 
  -- Apollon Oikonomopoulos <apollon@noc.grnet.gr>  Mon, 15 Nov 2010 12:42:53 +0200
+
 
 
