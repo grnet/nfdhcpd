@@ -615,9 +615,9 @@ class VMNetProxy(object):  # pylint: disable=R0902
             ]
             dhcp_options += [("name_server", x) for x in self.dhcp_nameservers]
 
-        elif req_type == DHCPRELEASE:
+        elif req_type in [DHCPRELEASE, DHCPDECLINE]:
             # Log and ignore
-            logging.info(" - DHCP: DHCPRELEASE from %s", binding)
+            logging.info(" - DHCP: %s from %s", DHCP_TYPES[req_type], binding)
             return
 
         # Finally, always add the server identifier and end options
