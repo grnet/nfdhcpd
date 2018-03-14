@@ -1,14 +1,8 @@
-Changes with nfdhcpd 0.16rc3 (16/06/2017)
+Changes with nfdhcpd 0.16 (14/03/2018)
 
   * Terminate gracefully upon receiving a SIGTERM othewise a "systemctl stop"
     will set the service to state "failed" instead of "inactive".
-
-Changes with nfdhcpd 0.16rc2 (09/05/2017)
-
   * Documentaion fixes
-
-Changes with nfdhcpd 0.16rc1 (13/03/2017)
-
   * Do major code cleanup
   * Fix bugs
   * Replace enable_dhcpv6 with mode. Valid values are 'auto', 'slaac',
