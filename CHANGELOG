@@ -1,3 +1,14 @@
+Changes with nfdhcpd 0.16 (14/03/2018)
+
+  * Terminate gracefully upon receiving a SIGTERM othewise a "systemctl stop"
+    will set the service to state "failed" instead of "inactive".
+  * Documentaion fixes
+  * Do major code cleanup
+  * Fix bugs
+  * Replace enable_dhcpv6 with mode. Valid values are 'auto', 'slaac',
+    'slaac+dhcpv6' and 'dhcpv6' for future use
+  * Add support for python-daemon >= 1.6
+
 Changes with nfdhcpd 0.15 (29/11/2016)
 
   * Remove unneeded scripts
