@@ -1,22 +1,10 @@
-nfdhcpd (0.16~rc3-1~jessie) jessie; urgency=medium
+nfdhcpd (0.16-1~jessie) jessie; urgency=medium
 
   * New upstream version
   * Add systemd unit service file
-
- -- Nikos Skalkotos <skalkoto@grnet.gr>  Mon, 19 Jun 2017 12:25:26 +0300
-
-nfdhcpd (0.16~rc2-2~jessie) jessie; urgency=medium
-
-  * New upstream version
   * Remove kvm-vif-bridge conffile for versions prior to 0.12
 
- -- Nikos Skalkotos <skalkoto@grnet.gr>  Tue, 09 May 2017 12:32:42 +0300
-
-nfdhcpd (0.16~rc1-1~jessie) jessie; urgency=medium
-
-  * New upstream version
-
- -- Nikos Skalkotos <skalkoto@grnet.gr>  Mon, 13 Mar 2017 15:29:27 +0200
+ -- Filippos Giannakos <philipgian@grnet.gr>  Wed, 14 Mar 2018 14:57:13 +0200
 
 nfdhcpd (0.15-1) stable; urgency=low
 
